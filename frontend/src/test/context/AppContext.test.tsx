@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppProvider, useAppContext } from "../../context/AppContext";
-import type { Medication } from "../../types";
+import type { Medication, ScheduleEvent } from "../../types";
 
 const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
@@ -337,6 +337,79 @@ describe("useAppContext", () => {
 		expect(result.current.existingPeople).toEqual(["Anna", "Max"]);
 		expect(result.current.stockThresholds.lowStockDays).toBe(10);
 		expect(result.current.settingsChanged).toBe(false);
+	});
+
+	it("derives coverage from active medications and excludes empty-stock taken doses from missed-dose input", () => {
+		const obsolete = { ...meds[0], id: 22, isObsolete: true };
+		mockUseMedications.mockReturnValue({ ...mockUseMedications(), meds: [...meds, obsolete] });
+		const takenDoses = new Set(["11-0-1", "22-0-1", "legacy-dose"]);
+		const takenDoseTimestamps = new Map([["11-0-1", 123]]);
+		mockUseDoses.mockReturnValue({ ...mockUseDoses(), takenDoses, takenDoseTimestamps });
+		const entry = { name: "Aspirin", medsLeft: 0, depletionTime: 456 };
+		mockCalculateCoverage.mockReturnValue({ all: [entry], low: [entry] });
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+		expect(mockBuildSchedulePreview).toHaveBeenCalledWith(meds, "en-US", true);
+		expect(mockCalculateCoverage).toHaveBeenLastCalledWith(
+			meds,
+			[],
+			"en-US",
+			7,
+			"automatic",
+			takenDoses,
+			takenDoseTimestamps
+		);
+		expect(result.current.coverageByMed.Aspirin).toEqual(entry);
+		expect(result.current.depletionByMed.Aspirin).toBe(456);
+		expect(mockComputeMissedPastDoseIds).toHaveBeenLastCalledWith(
+			[],
+			meds,
+			new Set(["22-0-1", "legacy-dose"]),
+			mockUseDoses().dismissedDoses
+		);
+		// People include obsolete medications, as before.
+		expect(result.current.existingPeople).toEqual(["Anna", "Max"]);
+	});
+
+	it("bounds past and future days while preserving dose grouping and today", () => {
+		(window.localStorage.getItem as ReturnType<typeof vi.fn>).mockReturnValue("2");
+		const day = (offset: number) => {
+			const date = new Date();
+			date.setHours(12, 0, 0, 0);
+			date.setDate(date.getDate() + offset);
+			return date;
+		};
+		const event = (offset: number, id: string, usage = 1): ScheduleEvent => ({
+			id,
+			medName: "Aspirin",
+			dateStr: `day-${offset}`,
+			when: day(offset).getTime(),
+			timeStr: "12:00",
+			usage,
+			isPast: offset < 0,
+			takenBy: "Max",
+			intakeRemindersEnabled: true,
+		});
+		mockBuildSchedulePreview.mockReturnValue({
+			events: [
+				event(-3, "old"),
+				event(-2, "boundary"),
+				event(0, "today-a"),
+				event(0, "today-b", 2),
+				event(1, "future-a"),
+				event(2, "future-b"),
+				event(3, "future-c"),
+			],
+		});
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+		expect(result.current.pastDays.map((d) => d.dateStr)).toEqual(["day--2"]);
+		expect(result.current.futureDays.map((d) => d.dateStr)).toEqual(["day-1", "day-2"]);
+		expect(result.current.todayDay?.meds[0].total).toBe(3);
+		expect(result.current.todayDay?.meds[0].doses.map((dose) => dose.id)).toEqual(["today-a", "today-b"]);
+		expect(result.current.todayDay?.meds[0].doses[0]).toMatchObject({ takenBy: ["Max"], intakeUnit: null });
+		expect(result.current.todayDay?.meds[0].lastWhen).toBe(day(0).getTime());
+		act(() => result.current.setScheduleDays(1));
+		expect(result.current.pastDays).toEqual([]);
+		expect(result.current.futureDays.map((d) => d.dateStr)).toEqual(["day-1"]);
 	});
 
 	it("silently refreshes medications after taking or undoing an as-needed intake", async () => {

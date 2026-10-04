@@ -6,7 +6,7 @@ import { type AppLanguage, normalizeAppLanguage } from "@medassist/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { log } from "../utils/logger";
-import { settingsChanged } from "../utils/settings";
+import { buildSettingsPayload, settingsChanged } from "../utils/settings";
 
 export interface Settings {
 	language: AppLanguage;
@@ -279,52 +279,6 @@ export function useSettings(options: UseSettingsOptions = {}): UseSettingsReturn
 		return response;
 	}, []);
 
-	const buildSettingsPayload = useCallback((settingsToSave: Settings) => {
-		const effectiveEmailEnabled = settingsToSave.emailEnabled && !!settingsToSave.notificationEmail?.trim();
-		const effectiveShoutrrrEnabled = settingsToSave.shoutrrrEnabled && !!settingsToSave.shoutrrrUrl?.trim();
-		const hasEmailStock =
-			effectiveEmailEnabled && settingsToSave.emailStockReminders && !!settingsToSave.notificationEmail?.trim();
-		const hasShoutrrrStock =
-			effectiveShoutrrrEnabled && settingsToSave.shoutrrrStockReminders && !!settingsToSave.shoutrrrUrl?.trim();
-		const hasAnyStockReminder = hasEmailStock || hasShoutrrrStock;
-		const repeatDailyReminders = hasAnyStockReminder ? settingsToSave.repeatDailyReminders : false;
-
-		return {
-			timezone: settingsToSave.timezone,
-			emailEnabled: effectiveEmailEnabled,
-			notificationEmail: settingsToSave.notificationEmail,
-			reminderDaysBefore: settingsToSave.reminderDaysBefore,
-			repeatDailyReminders,
-			skipRemindersForTakenDoses: settingsToSave.skipRemindersForTakenDoses,
-			repeatRemindersEnabled: settingsToSave.repeatRemindersEnabled,
-			reminderRepeatIntervalMinutes: settingsToSave.reminderRepeatIntervalMinutes,
-			maxNaggingReminders: settingsToSave.maxNaggingReminders ?? 5,
-			lowStockDays: settingsToSave.lowStockDays,
-			normalStockDays: settingsToSave.normalStockDays,
-			highStockDays: settingsToSave.highStockDays,
-			shoutrrrEnabled: effectiveShoutrrrEnabled,
-			shoutrrrUrl: settingsToSave.shoutrrrUrl,
-			emailStockReminders: settingsToSave.emailStockReminders,
-			emailIntakeReminders: settingsToSave.emailIntakeReminders,
-			emailPrescriptionReminders: settingsToSave.emailPrescriptionReminders,
-			shoutrrrStockReminders: settingsToSave.shoutrrrStockReminders,
-			shoutrrrIntakeReminders: settingsToSave.shoutrrrIntakeReminders,
-			shoutrrrPrescriptionReminders: settingsToSave.shoutrrrPrescriptionReminders,
-			stockCalculationMode: settingsToSave.stockCalculationMode,
-			shareMedicationOverview: settingsToSave.shareMedicationOverview,
-			upcomingTodayOnly: settingsToSave.upcomingTodayOnly,
-			shareScheduleTodayOnly: settingsToSave.shareScheduleTodayOnly,
-			swapDashboardMainSections: settingsToSave.swapDashboardMainSections,
-			language: settingsToSave.language,
-			smtpHost: settingsToSave.smtpHost,
-			smtpPort: settingsToSave.smtpPort,
-			smtpUser: settingsToSave.smtpUser,
-			smtpPass: settingsToSave.smtpPass || undefined,
-			smtpFrom: settingsToSave.smtpFrom,
-			smtpSecure: settingsToSave.smtpSecure,
-		};
-	}, []);
-
 	const flushSettingsWithKeepalive = useCallback(
 		(settingsToSave: Settings) => {
 			const payload = buildSettingsPayload(settingsToSave);
@@ -340,7 +294,7 @@ export function useSettings(options: UseSettingsOptions = {}): UseSettingsReturn
 				});
 			});
 		},
-		[buildSettingsPayload, getErrorMessage]
+		[getErrorMessage]
 	);
 
 	// Load settings function - exposed for manual refresh (e.g., after auth)
@@ -474,7 +428,7 @@ export function useSettings(options: UseSettingsOptions = {}): UseSettingsReturn
 				}
 			}
 		},
-		[buildSettingsPayload, fetchWithRefresh, getErrorMessage, loadSettings]
+		[fetchWithRefresh, getErrorMessage, loadSettings]
 	);
 
 	// Debounced auto-save: fires whenever settings change

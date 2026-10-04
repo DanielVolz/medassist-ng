@@ -30,7 +30,7 @@
     "pretest:e2e:domain": "npm --prefix ../shared run build",
     "test:e2e:domain": "rm -rf test-results && playwright test --config=playwright.stable.config.ts e2e/domain-safety.spec.ts",
     "pretest:e2e:all": "npm --prefix ../shared run build",
-    "test:e2e:all": "rm -rf test-results && playwright test --config=playwright.all.config.ts",
+    "test:e2e:all": "node scripts/run-playwright-all.mjs",
     "test:e2e:local": "PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=4 npm run test:e2e",
     "test:e2e:all:local": "PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=4 npm run test:e2e:all",
     "test:e2e:with-video": "npm run test:e2e && npm run test:e2e:video",

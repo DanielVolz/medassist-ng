@@ -127,10 +127,33 @@ async function expectModalFooterContract(modal: Locator, options: { mobile: bool
 		const sampleY = Math.min(footerRect.bottom - 6, footerRect.top + 8);
 		const modalBottomSampleY = modalRect.bottom - 2;
 		const sampleXs = [modalRect.left + 6, modalRect.left + modalRect.width / 2, modalRect.right - 6];
-		const footerHitMisses = sampleXs.filter((x) => {
+		const footerHitDetails = sampleXs.map((x) => {
 			const hit = document.elementFromPoint(x, sampleY);
-			return !hit || (hit !== footerElement && !footerElement.contains(hit));
-		}).length;
+			const hitRect = hit?.getBoundingClientRect();
+			const hitStack = document
+				.elementsFromPoint(x, sampleY)
+				.slice(0, 5)
+				.map((element) => ({
+					tag: element.tagName,
+					className: typeof element.className === "string" ? element.className : null,
+					testId: element.getAttribute("data-testid"),
+					zIndex: window.getComputedStyle(element).zIndex,
+					pointerEvents: window.getComputedStyle(element).pointerEvents,
+				}));
+			return {
+				x,
+				y: sampleY,
+				hitIsFooter: Boolean(hit && (hit === footerElement || footerElement.contains(hit))),
+				hitTag: hit?.tagName ?? null,
+				hitClass: typeof hit?.className === "string" ? hit.className : null,
+				hitTestId: hit?.getAttribute("data-testid") ?? null,
+				hitRect: hitRect
+					? { left: hitRect.left, right: hitRect.right, top: hitRect.top, bottom: hitRect.bottom }
+					: null,
+				hitStack,
+			};
+		});
+		const footerHitMisses = footerHitDetails.filter((hit) => !hit.hitIsFooter).length;
 		const modalBottomHitMisses = sampleXs.filter((x) => {
 			const hit = document.elementFromPoint(x, modalBottomSampleY);
 			return !hit || (hit !== footerElement && !footerElement.contains(hit));
@@ -179,6 +202,7 @@ async function expectModalFooterContract(modal: Locator, options: { mobile: bool
 				Math.abs(footerRect.bottom - initialRect.bottom),
 				Math.abs(footerRect.top - initialRect.top)
 			),
+			footerHitDetails,
 			footerHitMisses,
 			footerIsSticky: window.getComputedStyle(footerElement).position === "sticky",
 			modalBottomHitMisses,
@@ -193,7 +217,7 @@ async function expectModalFooterContract(modal: Locator, options: { mobile: bool
 	expect(Math.min(metrics.footerBottomDistance, metrics.footerPaintedBottomDistance)).toBeLessThanOrEqual(4);
 	expect(metrics.footerCoversInlineStart).toBe(true);
 	expect(metrics.footerCoversInlineEnd).toBe(true);
-	expect(metrics.footerHitMisses).toBe(0);
+	expect(metrics.footerHitMisses, JSON.stringify(metrics.footerHitDetails)).toBe(0);
 	if (options.strictBottomCoverage) {
 		expect(metrics.modalBottomHitMisses).toBe(0);
 	}

@@ -852,12 +852,12 @@ describe("UserProfile", () => {
 	});
 
 	it("requires confirmation only after the recovery email changes and saves it separately", async () => {
-		mockProfileRequests([mockUser]);
+		mockProfileRequests([{ ...mockUser, email: "testuser@example.com" }]);
 
 		renderUserProfile();
 
 		await waitFor(() => {
-			expect(screen.getByLabelText(/auth\.email/i)).toBeInTheDocument();
+			expect(screen.getByLabelText(/auth\.email/i)).toHaveValue("testuser@example.com");
 		});
 		expect(screen.queryByLabelText(/auth\.currentPassword/i)).not.toBeInTheDocument();
 

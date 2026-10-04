@@ -202,6 +202,43 @@ test.describe("Medication Editing", () => {
 		await expect(page.getByLabel(/(Generic Name|form\.genericName)/i)).toHaveValue("Acetylsalicylic acid");
 	});
 
+	for (const viewport of [
+		{ name: "desktop", size: { width: 1280, height: 900 } },
+		{ name: "mobile", size: { width: 390, height: 844 } },
+	]) {
+		test(`should validate required names and transform generic-only submit on ${viewport.name}`, async ({ page }) => {
+			await page.setViewportSize(viewport.size);
+			const name = `Required Name ${viewport.name}`;
+			const med = await createMedicationViaAPI({ name });
+			createdMeds.push(med);
+			await navigateTo(page, "/medications");
+			await clickEditMed(page, name);
+			const form = getMedicationEditForm(page);
+			const nameInput = form.getByRole("textbox", { name: /^(Commercial Name|Name|form\.name)/i });
+			const genericInput = form.getByRole("textbox", { name: /^(Generic Name|form\.genericName)/i });
+			await nameInput.fill(" ");
+			await genericInput.fill(" ");
+			const writes: string[] = [];
+			page.on("request", (request) => {
+				if (request.method() === "PUT" && new URL(request.url()).pathname === `/api/medications/${med.id}`) {
+					writes.push(request.postData() ?? "");
+				}
+			});
+			await form.getByRole("button", { name: /Save|common\.save/i }).click();
+			await expect(form.locator(".field-error").first()).toBeVisible();
+			expect(writes).toEqual([]);
+			await genericInput.fill(` Generic ${viewport.name} `);
+			const saved = page.waitForResponse(
+				(response) =>
+					response.request().method() === "PUT" && new URL(response.url()).pathname === `/api/medications/${med.id}`
+			);
+			await form.getByRole("button", { name: /Save|common\.save/i }).click();
+			expect((await saved).status()).toBe(200);
+			expect(writes).toHaveLength(1);
+			expect(JSON.parse(writes[0])).toMatchObject({ name: "", genericName: `Generic ${viewport.name}` });
+		});
+	}
+
 	test("should add notes to an existing medication", async ({ page }) => {
 		createdMeds.push(await createMedicationViaAPI({ name: "Edit Notes Med" }));
 		await navigateTo(page, "/medications");

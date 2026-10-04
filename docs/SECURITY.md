@@ -1,5 +1,25 @@
 # Security Notes
 
+## Backup Import Contract
+
+Preview and commit both validate backups before replacement. Supported formats remain `1` and
+`1.0`–`1.9`; pre-1.9 backups may omit `asNeededIntakes`. Unknown fields are rejected at every
+import-object boundary, including account IDs, tokens and filesystem paths. The legacy
+`settings.shareStockStatus` field is accepted but not restored. Empty optional medication dates
+and legacy language aliases remain supported.
+
+Both endpoints enforce a 50 MiB JSON-body limit (HTTP 413). The browser rejects files above
+50 MiB before reading them and uses the existing feedback UI for size/validation errors.
+Embedded images must be canonical base64 data URLs for supported raster formats, at most
+10 MiB decoded and 40 million pixels. Preview decodes images without writing files.
+
+Commit revalidates independently and replaces the account graph in the production SQLite
+write transaction. Import image sets use random names and exclusive creation; any failed
+write cleans only files it created. Transaction failure removes newly created image sets,
+while previous images are deleted only after commit. This covers handled validation, I/O
+and database failures, not process crashes or power loss; cross-resource crash recovery is
+not implemented.
+
 ## Browser Session And CSRF Contract
 
 MedAssist uses HTTP-only cookies for browser sessions and also accepts `Authorization: Bearer ...` for JWT and API-key clients on authenticated API routes.
@@ -22,6 +42,18 @@ Cookie-auth state-changing route groups:
 - Medication enrichment: authenticated enrichment requests
 
 Public token routes are not cookie-auth endpoints. Share links, share dose actions, and notification action tokens are authorized by their own opaque token values and must stay scoped to the token target.
+
+## Password-Change Session Rotation
+
+`PUT /auth/me` requires the current local password for a password change. Password hashing and replacement-token
+signing happen before the write transaction. The user update (including any accompanying email change),
+revocation of all existing refresh tokens, and insertion of the replacement refresh session commit in one
+SQLite write transaction. Replacement cookies are sent only after commit.
+
+If a write fails, the prior password and refresh sessions remain intact and no replacement cookies are sent.
+On success, old refresh tokens are rejected and the initiating browser receives a usable replacement session.
+Profile-only changes do not rotate or revoke sessions. Existing credential-version checks for access tokens
+are unchanged.
 
 ## Public Auth State
 

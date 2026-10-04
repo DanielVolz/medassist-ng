@@ -10,44 +10,20 @@ import { useMedications } from "../hooks/useMedications";
 import { useRefill } from "../hooks/useRefill";
 import { useSettings } from "../hooks/useSettings";
 import { useShare } from "../hooks/useShare";
-import {
-	type Coverage,
-	type FormState,
-	getMedDisplayName,
-	type Medication,
-	type ScheduleEvent,
-	type StockThresholds,
-} from "../types";
+import type { Coverage, FormState, Medication, ScheduleEvent, StockThresholds } from "../types";
 import { getSystemLocale, setDefaultFormattingTimezone } from "../utils/formatters";
-import { mergePersonTags } from "../utils/person-tags";
-import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds } from "../utils/schedule";
 import { settingsChanged as hasSettingsChanged } from "../utils/settings";
 import { ShareContextProvider } from "./ShareContext";
 import { useAppModals } from "./useAppModals";
+import { type DayMedEntry, useAppSchedule } from "./useAppSchedule";
 import { type ImportPreview, type ImportResult, useImportExport } from "./useImportExport";
 
+export type { DayMedEntry } from "./useAppSchedule";
 export type { ImportPreview } from "./useImportExport";
 
 // =============================================================================
 // Types
 // =============================================================================
-
-type DoseInfo = {
-	id: string;
-	timeStr: string;
-	when: number;
-	usage: number;
-	intakeUnit?: "ml" | "tsp" | "tbsp" | null;
-	takenBy: string[];
-	intakeRemindersEnabled: boolean;
-};
-
-export type DayMedEntry = {
-	medName: string;
-	total: number;
-	doses: DoseInfo[];
-	lastWhen: number;
-};
 
 type GroupedDay = {
 	dateStr: string;
@@ -394,157 +370,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 	// Computed values - combine app language with timezone region for locale
 	const systemLocale = getSystemLocale(i18n.language);
-	const activeMeds = useMemo(() => medications.meds.filter((m) => !m.isObsolete), [medications.meds]);
-	const schedule = useMemo(() => buildSchedulePreview(activeMeds, systemLocale, true), [activeMeds, systemLocale]);
-
-	const coverage = useMemo(
-		() =>
-			calculateCoverage(
-				activeMeds,
-				schedule.events,
-				systemLocale,
-				settingsHook.settings.reminderDaysBefore,
-				settingsHook.settings.stockCalculationMode,
-				doses.takenDoses,
-				doses.takenDoseTimestamps
-			),
-		[
-			activeMeds,
-			schedule.events,
-			systemLocale,
-			settingsHook.settings.reminderDaysBefore,
-			settingsHook.settings.stockCalculationMode,
-			doses.takenDoses,
-			doses.takenDoseTimestamps,
-		]
-	);
-
-	const depletionByMed = useMemo(
-		() => Object.fromEntries(coverage.all.map((c) => [c.name, c.depletionTime])),
-		[coverage.all]
-	);
-
-	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
-
-	const outOfStockMedicationIds = useMemo(
-		() =>
-			new Set(
-				activeMeds.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0).map((med) => med.id)
-			),
-		[activeMeds, coverageByMed]
-	);
-
-	const effectiveTakenDoses = useMemo(
-		() =>
-			new Set(
-				Array.from(doses.takenDoses).filter((doseId) => {
-					const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
-					return Number.isNaN(medId) || !outOfStockMedicationIds.has(medId);
-				})
-			),
-		[doses.takenDoses, outOfStockMedicationIds]
-	);
-
-	// Centralized stock thresholds for consistent status display across all components
-	const stockThresholds: StockThresholds = useMemo(
-		() => ({
-			lowStockDays: settingsHook.settings.lowStockDays,
-			normalStockDays: settingsHook.settings.normalStockDays,
-			highStockDays: settingsHook.settings.highStockDays,
-			criticalStockDays: settingsHook.settings.reminderDaysBefore, // Critical uses the reminder threshold
-			expiryWarningDays: settingsHook.settings.expiryWarningDays,
-		}),
-		[
-			settingsHook.settings.lowStockDays,
-			settingsHook.settings.normalStockDays,
-			settingsHook.settings.highStockDays,
-			settingsHook.settings.reminderDaysBefore,
-			settingsHook.settings.expiryWarningDays,
-		]
-	);
-
-	const existingPeople = useMemo(() => {
-		return mergePersonTags(medications.meds.flatMap((medication) => medication.takenBy || []));
-	}, [medications.meds]);
-
-	const groupedSchedule = useMemo(() => {
-		const days = new Map<string, { dateStr: string; date: Date; isPast: boolean; meds: Map<string, DayMedEntry> }>();
-		// Limit past events to scheduleDays window to avoid overwhelming the UI.
-		// Without this, medications with start dates far in the past generate thousands
-		// of events that fill the display budget and push out today/future events.
-		const pastCutoff = new Date();
-		pastCutoff.setDate(pastCutoff.getDate() - scheduleDays);
-		pastCutoff.setHours(0, 0, 0, 0);
-		const pastCutoffMs = pastCutoff.getTime();
-		schedule.events
-			.filter((e) => !e.isPast || e.when >= pastCutoffMs)
-			.forEach((event) => {
-				const day = days.get(event.dateStr) ?? {
-					dateStr: event.dateStr,
-					date: new Date(event.when),
-					isPast: event.isPast,
-					meds: new Map(),
-				};
-				const medEntry = day.meds.get(event.medName) ?? {
-					medName: event.medName,
-					total: 0,
-					doses: [],
-					lastWhen: event.when,
-				};
-				medEntry.total += event.usage;
-				medEntry.doses.push({
-					id: event.id,
-					timeStr: event.timeStr,
-					when: event.when,
-					usage: event.usage,
-					intakeUnit: event.intakeUnit ?? null,
-					takenBy: event.takenBy ? [event.takenBy] : [],
-					intakeRemindersEnabled: event.intakeRemindersEnabled,
-				});
-				medEntry.lastWhen = Math.max(medEntry.lastWhen, event.when);
-				day.meds.set(event.medName, medEntry);
-				days.set(event.dateStr, day);
-			});
-		return Array.from(days.values()).map((d) => ({
-			dateStr: d.dateStr,
-			date: d.date,
-			isPast: d.isPast,
-			meds: Array.from(d.meds.values()),
-		}));
-	}, [schedule.events, scheduleDays]);
-
-	const pastDays = useMemo(() => groupedSchedule.filter((d) => d.isPast), [groupedSchedule]);
-
-	// Separate today from future days
-	const todayDay = useMemo(() => {
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		return (
-			groupedSchedule.find((d) => {
-				const dayDate = new Date(d.date);
-				dayDate.setHours(0, 0, 0, 0);
-				return dayDate.getTime() === today.getTime();
-			}) || null
-		);
-	}, [groupedSchedule]);
-
-	const futureDays = useMemo(() => {
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		return groupedSchedule
-			.filter((d) => {
-				if (d.isPast) return false;
-				const dayDate = new Date(d.date);
-				dayDate.setHours(0, 0, 0, 0);
-				return dayDate.getTime() > today.getTime();
-			})
-			.slice(0, scheduleDays);
-	}, [groupedSchedule, scheduleDays]);
-
-	const missedPastDoseIds = useMemo(
-		() => computeMissedPastDoseIds(pastDays, activeMeds, effectiveTakenDoses, doses.dismissedDoses),
-		[pastDays, activeMeds, effectiveTakenDoses, doses.dismissedDoses]
-	);
+	const {
+		activeMeds,
+		schedule,
+		coverage,
+		depletionByMed,
+		coverageByMed,
+		stockThresholds,
+		existingPeople,
+		groupedSchedule,
+		pastDays,
+		todayDay,
+		futureDays,
+		missedPastDoseIds,
+	} = useAppSchedule({ meds: medications.meds, systemLocale, settings: settingsHook.settings, doses, scheduleDays });
 
 	// Wrapper to pass meds to openShareDialog
 	const openShareDialog = useCallback(() => {

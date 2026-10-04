@@ -55,6 +55,15 @@ Browser cookie, CORS, CSRF, Bearer token, and API-key security behavior is docum
 
 Generate secrets with `openssl rand -hex 32`.
 
+API key hashes depend on the selected pepper: `API_KEY_PEPPER`, then `JWT_SECRET`,
+then `REFRESH_SECRET`. Keep that value stable for existing keys. Adding a dedicated
+pepper to an installation that previously used an auth secret, changing the selected
+secret, or changing which fallback is selected invalidates existing API keys.
+Plan such a rotation explicitly: update the configuration, restart the backend,
+sign in through browser authentication, and create replacement API keys. Update
+each client and revoke obsolete keys; existing hashes cannot be converted to a
+new pepper without the original key.
+
 Production startup fails fast when `NODE_ENV=production`, `AUTH_ENABLED=false`, and `ALLOW_UNAUTHENTICATED` is not `true`. This protects health-related personal data from accidental unauthenticated public deployments.
 
 For public deployments, enable `AUTH_ENABLED=true` and configure local form login or OIDC SSO. If you run a private local-only instance without authentication, set `ALLOW_UNAUTHENTICATED=true` deliberately and keep the app off untrusted networks.

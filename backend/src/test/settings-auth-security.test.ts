@@ -239,6 +239,59 @@ describe("Settings and API key security contracts", () => {
 		expect(Number(refreshedRow.rows[0].last_used_at)).toBeGreaterThan(staleLastUsedSeconds);
 	});
 
+	it("keeps an existing API key valid and writes lastUsedAt at the exact interval boundary", async () => {
+		const now = new Date("2026-10-03T12:00:00.000Z");
+		const lastUsedAt = new Date(now.getTime() - 15 * 60 * 1000);
+		const userId = await createTestUser(testClient, { username: "settings-api-key-boundary-user" });
+		const apiToken = "ma_last_used_boundary_token_123456789";
+		const keyId = await insertApiKey({ userId, token: apiToken, scope: "read", lastUsedAt });
+
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			await testClient.execute("CREATE TABLE api_key_usage_writes (count INTEGER NOT NULL)");
+			await testClient.execute("INSERT INTO api_key_usage_writes VALUES (0)");
+			await testClient.execute(`
+				CREATE TRIGGER count_api_key_usage_writes AFTER UPDATE OF last_used_at ON api_keys
+				WHEN NEW.id = ${keyId}
+				BEGIN
+					UPDATE api_key_usage_writes SET count = count + 1;
+				END
+			`);
+			const usageWriteCount = async () => {
+				const result = await testClient.execute("SELECT count FROM api_key_usage_writes");
+				return Number(result.rows[0].count);
+			};
+			const request = () =>
+				app.inject({
+					method: "GET",
+					url: "/settings",
+					headers: { authorization: `Bearer ${apiToken}` },
+				});
+			vi.setSystemTime(new Date(now.getTime() - 1));
+			const beforeBoundary = await Promise.all([request(), request(), request()]);
+			expect(beforeBoundary.map((response) => response.statusCode)).toEqual([200, 200, 200]);
+			expect(await usageWriteCount()).toBe(0);
+
+			vi.setSystemTime(now);
+			const responses = await Promise.all([request(), request(), request()]);
+			expect(responses.map((response) => response.statusCode)).toEqual([200, 200, 200]);
+			expect(await usageWriteCount()).toBe(1);
+			const repeats = await Promise.all([request(), request(), request()]);
+			expect(repeats.map((response) => response.statusCode)).toEqual([200, 200, 200]);
+			expect(await usageWriteCount()).toBe(1);
+
+			const row = await testClient.execute({
+				sql: "SELECT last_used_at FROM api_keys WHERE id = ?",
+				args: [keyId],
+			});
+			expect(Number(row.rows[0].last_used_at)).toBe(Math.floor(now.getTime() / 1000));
+		} finally {
+			vi.useRealTimers();
+			await testClient.execute("DROP TRIGGER IF EXISTS count_api_key_usage_writes");
+			await testClient.execute("DROP TABLE IF EXISTS api_key_usage_writes");
+		}
+	});
+
 	it("rejects PUT /settings with a read-only API key", async () => {
 		const userId = await createTestUser(testClient, { username: "settings-read-mutation-user" });
 		const apiToken = "ma_read_only_mutation_token_123456789";

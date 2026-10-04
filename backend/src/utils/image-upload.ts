@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, unlinkSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { open, writeFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import sharp from "sharp";
 
@@ -48,6 +49,7 @@ export async function writeOptimizedImageSet(
 		thumbSizePx?: number;
 		fullQuality?: number;
 		thumbQuality?: number;
+		exclusive?: boolean;
 	}
 ): Promise<{ filename: string; thumbFilename: string }> {
 	const maxEdgePx = options?.maxEdgePx ?? 1600;
@@ -55,7 +57,8 @@ export async function writeOptimizedImageSet(
 	const fullQuality = options?.fullQuality ?? 82;
 	const thumbQuality = options?.thumbQuality ?? 76;
 
-	const filename = `${filePrefix}-${Date.now()}.webp`;
+	const suffix = options?.exclusive ? randomUUID() : Date.now();
+	const filename = `${filePrefix}-${suffix}.webp`;
 	const thumbFilename = getThumbFilename(filename);
 
 	const filepath = resolve(imagesDir, filename);
@@ -73,8 +76,31 @@ export async function writeOptimizedImageSet(
 		.webp({ quality: thumbQuality })
 		.toBuffer();
 
-	await writeFile(filepath, optimizedBuffer);
-	await writeFile(thumbFilepath, thumbBuffer);
+	if (!options?.exclusive) {
+		await writeFile(filepath, optimizedBuffer);
+		await writeFile(thumbFilepath, thumbBuffer);
+		return { filename, thumbFilename };
+	}
+
+	const createdFiles: string[] = [];
+	try {
+		for (const [path, buffer] of [
+			[filepath, optimizedBuffer],
+			[thumbFilepath, thumbBuffer],
+		] as const) {
+			const handle = await open(path, "wx");
+			createdFiles.push(path);
+			try {
+				await handle.writeFile(buffer);
+			} finally {
+				await handle.close();
+			}
+		}
+	} catch (error) {
+		// Only remove files created by this call; an exclusive-write collision is not ours.
+		for (const path of createdFiles) unlinkSync(path);
+		throw error;
+	}
 
 	return { filename, thumbFilename };
 }

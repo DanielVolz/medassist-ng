@@ -13,7 +13,7 @@ import {
 	isAsNeededAnchorDoseId,
 } from "../services/as-needed-intakes-service.js";
 import { computeMedicationCurrentStock } from "../services/current-stock.js";
-import { markDoseTakenForUser } from "../services/dose-tracking-service.js";
+import { markDoseSkippedForUser, markDoseTakenForUser } from "../services/dose-tracking-service.js";
 import {
 	getIntakeJournalForDoseEvent,
 	resolveTrackedDoseEventForUser,
@@ -346,39 +346,6 @@ async function isDoseOutOfStock(options: {
 			nowMs: stockBeforeDoseMs,
 		}) <= 0
 	);
-}
-
-async function markDoseSkippedForUser(input: {
-	userId: number;
-	doseId: string;
-}): Promise<"created" | "updated" | "already_skipped" | "invalid"> {
-	if (await isAsNeededAnchorDoseId(db, input.userId, input.doseId)) return "invalid";
-	const [existing] = await db
-		.select()
-		.from(doseTracking)
-		.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId)));
-
-	if (existing) {
-		if (existing.dismissed) {
-			return "already_skipped";
-		}
-
-		await db
-			.update(doseTracking)
-			.set({ dismissed: true })
-			.where(and(eq(doseTracking.userId, input.userId), eq(doseTracking.doseId, input.doseId)));
-		return "updated";
-	}
-
-	await db.insert(doseTracking).values({
-		userId: input.userId,
-		doseId: input.doseId,
-		markedBy: null,
-		takenAt: new Date(0),
-		dismissed: true,
-	});
-
-	return "created";
 }
 
 async function undoDoseSkippedForUser(input: { userId: number; doseId: string }): Promise<boolean | "invalid"> {

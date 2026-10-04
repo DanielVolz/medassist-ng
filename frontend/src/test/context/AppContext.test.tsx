@@ -541,6 +541,50 @@ describe("useAppContext", () => {
 		expect(window.history.back).toHaveBeenCalledTimes(1);
 	});
 
+	it("deduplicates detail opens and refreshes selected stock without another history entry", () => {
+		const { result, rerender } = renderHook(() => useAppContext(), { wrapper });
+		act(() => {
+			result.current.openMedDetail(meds[0]);
+			result.current.openMedDetail(meds[0]);
+		});
+		expect(mockUseRefill().loadRefillHistory).toHaveBeenCalledTimes(1);
+		expect(window.history.pushState).toHaveBeenCalledTimes(1);
+		expect(window.history.pushState).toHaveBeenCalledWith({ modal: "medDetail", medId: 11 }, "");
+
+		const updated = { ...meds[0], packCount: 3 };
+		mockUseMedications.mockReturnValue({ ...mockUseMedications(), meds: [updated] });
+		rerender();
+		expect(result.current.selectedMed).toEqual(updated);
+		expect(window.history.pushState).toHaveBeenCalledTimes(1);
+	});
+
+	it("preserves detail under a nested image lightbox when browser back closes the top modal", () => {
+		const { result } = renderHook(() => useAppContext(), { wrapper });
+		act(() => result.current.openMedDetail(meds[0]));
+		act(() => result.current.openImageLightbox());
+		act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+		expect(result.current.showImageLightbox).toBe(false);
+		expect(result.current.selectedMed).toEqual(meds[0]);
+		act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+		expect(result.current.selectedMed).toBeNull();
+	});
+
+	it("clears all extracted modal state on an identity switch", () => {
+		const { result, rerender } = renderHook(() => useAppContext(), { wrapper });
+		act(() => {
+			result.current.openMedDetail(meds[0]);
+			result.current.openImageLightbox();
+			result.current.openScheduleLightbox("private.png");
+			result.current.openUserFilter("Max");
+		});
+		mockUseAuth.mockReturnValue({ ...mockUseAuth(), user: { id: 2 } });
+		rerender();
+		expect(result.current.selectedMed).toBeNull();
+		expect(result.current.showImageLightbox).toBe(false);
+		expect(result.current.scheduleLightboxImage).toBeNull();
+		expect(result.current.selectedUser).toBeNull();
+	});
+
 	it("imports data and triggers reload plus import result state", async () => {
 		const { result } = renderHook(() => useAppContext(), { wrapper });
 

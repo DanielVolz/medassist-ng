@@ -172,6 +172,67 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 				needsSetup: true,
 			});
 		});
+
+		it("keeps the same minimal unauthenticated shape after first-user setup", async () => {
+			const registration = await app.inject({
+				method: "POST",
+				url: "/auth/register",
+				payload: {
+					username: "publicstatesynthetic",
+					email: "publicstate@example.com",
+					password: "SyntheticPassword123",
+				},
+			});
+			expect(registration.statusCode).toBe(201);
+
+			// Deliberately do not reuse registration cookies: this is a pre-login request.
+			const response = await app.inject({ method: "GET", url: "/auth/state" });
+			expect(response.statusCode).toBe(200);
+			expect(response.headers["cache-control"]).toBe("no-store");
+			expect(response.json()).toEqual({
+				authEnabled: true,
+				registrationEnabled: true,
+				formLoginEnabled: true,
+				passwordResetEnabled: true,
+				oidcEnabled: false,
+				oidcProviderName: "SSO",
+				needsSetup: false,
+			});
+		});
+
+		it("enforces the public state limit while leaving another setup client usable", async () => {
+			const rateLimitedApp = (await buildTestApp({ client: testClient })).app;
+			await rateLimitedApp.register(rateLimit, { max: 1000, timeWindow: "1 minute" });
+			await rateLimitedApp.register(authRoutes);
+			await rateLimitedApp.ready();
+			try {
+				for (let attempt = 0; attempt < 60; attempt += 1) {
+					const response = await rateLimitedApp.inject({
+						method: "GET",
+						url: "/auth/state",
+						remoteAddress: "198.51.100.43",
+					});
+					expect(response.statusCode).toBe(200);
+					expect(response.json().needsSetup).toBe(true);
+				}
+				const blocked = await rateLimitedApp.inject({
+					method: "GET",
+					url: "/auth/state",
+					remoteAddress: "198.51.100.43",
+				});
+				expect(blocked.statusCode).toBe(429);
+				expect(blocked.json().code).toBe("RATE_LIMIT_EXCEEDED");
+				const otherClient = await rateLimitedApp.inject({
+					method: "GET",
+					url: "/auth/state",
+					remoteAddress: "198.51.100.44",
+				});
+				expect(otherClient.statusCode).toBe(200);
+				expect(otherClient.json().needsSetup).toBe(true);
+			} finally {
+				await rateLimitedApp.close();
+			}
+		});
 	});
 
 	// ---------------------------------------------------------------------------

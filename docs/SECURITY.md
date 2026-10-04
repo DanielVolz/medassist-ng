@@ -60,11 +60,13 @@ are unchanged.
 `GET /auth/state` is intentionally public because the browser must know which login/setup UI to render before a user can authenticate. The response is limited to UX routing fields:
 
 - whether authentication is enabled
-- whether registration, form login, and OIDC login are available
+- whether registration, form login, password reset, and OIDC login are available
 - the configured OIDC provider display name
 - whether first-user setup should be shown
 
-The endpoint does not expose user records, usernames, provider issuer URLs, client IDs, secrets, token settings, or the raw user count. It is rate-limited and sends `Cache-Control: no-store` so browser setup state does not become stale after first-user registration.
+The endpoint does not expose user records, usernames, provider issuer URLs, client IDs, secrets, token settings, or the raw user count. Internal `hasUsers` is not returned separately: `needsSetup` is the minimal derived bootstrap signal the browser needs. This deliberately reveals whether initial setup is needed, not account identities. Requiring a session here would prevent first-user setup and pre-login mode selection.
+
+It is limited to 60 requests per IP per minute and sends `Cache-Control: no-store` so browser setup state does not become stale after first-user registration. The explicit response allowlist stays identical before and after setup; only UX values change. These lightweight protections do not replace authentication, authorization, or the stricter limits on credential and recovery routes.
 
 ## CORS Expectations
 

@@ -46,6 +46,8 @@ export type ImportResult = {
 type UseImportExportOptions = {
 	onImportComplete: () => void;
 };
+type ImportError = { error?: string; code?: string; details?: { _errors?: string[] } };
+const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 
 export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 	const { user, authFetch } = useAuth();
@@ -59,6 +61,24 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 	const [pendingImportData, setPendingImportData] = useState<unknown>(null);
 	const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
 	const [importResult, setImportResult] = useState<ImportResult | null>(null);
+	const showImportError = useCallback(
+		(data: ImportError, status: number) => {
+			if (status === 413 || data.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
+				showFeedback({ message: t("exportImport.fileTooLarge"), tone: "error" });
+				return;
+			}
+			const invalid = data.code === "INVALID_IMPORT_DATA" || data.error === "Invalid import data format";
+			const details = data.details?._errors
+				?.filter((value) => typeof value === "string")
+				.slice(0, 10)
+				.join("; ");
+			showFeedback({
+				message: `${t(invalid ? "exportImport.invalidFile" : "exportImport.importError")}${details ? `: ${details}` : ""}`,
+				tone: "error",
+			});
+		},
+		[showFeedback, t]
+	);
 
 	const resetImportExportState = useCallback(() => {
 		setShowExportModal(false);
@@ -102,6 +122,14 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 		(e: React.ChangeEvent<HTMLInputElement>) => {
 			const file = e.target.files?.[0];
 			if (!file) return;
+			e.target.value = "";
+			setShowImportConfirm(false);
+			setPendingImportData(null);
+			setImportPreview(null);
+			if (file.size > MAX_IMPORT_BYTES) {
+				showFeedback({ message: t("exportImport.fileTooLarge"), tone: "error" });
+				return;
+			}
 
 			const reader = new FileReader();
 			reader.onload = async (event) => {
@@ -119,15 +147,18 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify(data),
 					});
+					if (res.status === 413) {
+						showImportError({}, 413);
+						return;
+					}
 
 					const text = await res.text();
-					let previewResponse: { error?: string; preview?: ImportPreview } = {};
+					let previewResponse: ImportError & { preview?: ImportPreview } = {};
 					try {
 						previewResponse = text ? JSON.parse(text) : {};
 					} catch {
-						log.error("Import preview response parse error:", text);
 						showFeedback({
-							message: `${t("exportImport.importError")}: Server returned invalid response`,
+							message: t("exportImport.invalidResponse"),
 							tone: "error",
 						});
 						return;
@@ -136,14 +167,7 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 					if (!res.ok || !previewResponse.preview) {
 						setPendingImportData(null);
 						setImportPreview(null);
-						if (previewResponse.error === "Invalid import data format") {
-							showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
-							return;
-						}
-						showFeedback({
-							message: `${t("exportImport.importError")}: ${previewResponse.error || `HTTP ${res.status}`}`,
-							tone: "error",
-						});
+						showImportError(previewResponse, res.status);
 						return;
 					}
 
@@ -157,10 +181,10 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 					showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
 				}
 			};
+			reader.onerror = () => showFeedback({ message: t("exportImport.invalidFile"), tone: "error" });
 			reader.readAsText(file);
-			e.target.value = "";
 		},
-		[authFetch, showFeedback, t]
+		[authFetch, showFeedback, showImportError, t]
 	);
 
 	const handleImportConfirm = useCallback(async () => {
@@ -174,10 +198,13 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(pendingImportData),
 			});
+			if (res.status === 413) {
+				showImportError({}, 413);
+				return;
+			}
 
 			const text = await res.text();
-			let data: {
-				error?: string;
+			let data: ImportError & {
 				message?: string;
 				imported?:
 					| {
@@ -192,19 +219,15 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 			try {
 				data = text ? JSON.parse(text) : {};
 			} catch {
-				log.error("Import response parse error:", text);
 				showFeedback({
-					message: `${t("exportImport.importError")}: Server returned invalid response`,
+					message: t("exportImport.invalidResponse"),
 					tone: "error",
 				});
 				return;
 			}
 
 			if (!res.ok) {
-				showFeedback({
-					message: `${t("exportImport.importError")}: ${data.error || `HTTP ${res.status}`}`,
-					tone: "error",
-				});
+				showImportError(data, res.status);
 				return;
 			}
 
@@ -225,7 +248,7 @@ export function useImportExport({ onImportComplete }: UseImportExportOptions) {
 			setImportPreview(null);
 			setImporting(false);
 		}
-	}, [authFetch, onImportComplete, pendingImportData, showFeedback, t]);
+	}, [authFetch, onImportComplete, pendingImportData, showFeedback, showImportError, t]);
 
 	return useMemo(
 		() => ({

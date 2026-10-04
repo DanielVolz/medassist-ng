@@ -259,4 +259,69 @@ describe("useImportExport", () => {
 		expect(authFetchMock).not.toHaveBeenCalled();
 		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({ message: "exportImport.invalidFile", tone: "error" });
 	});
+
+	it("rejects oversized files before reading or requesting preview and clears stale review", () => {
+		const reader = vi.fn(() => ({ readAsText: vi.fn() }));
+		vi.stubGlobal("FileReader", reader);
+		const { result } = createHook();
+		act(() => {
+			result.current.setPendingImportData({ version: "1" });
+			result.current.setShowImportConfirm(true);
+		});
+		const target = { files: [{ size: 50 * 1024 * 1024 + 1 }], value: "large.json" };
+		act(() => result.current.handleImportFileSelect({ target } as unknown as React.ChangeEvent<HTMLInputElement>));
+		expect(reader).not.toHaveBeenCalled();
+		expect(authFetchMock).not.toHaveBeenCalled();
+		expect(target.value).toBe("");
+		expect(result.current.pendingImportData).toBeNull();
+		expect(result.current.showImportConfirm).toBe(false);
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({ message: "exportImport.fileTooLarge", tone: "error" });
+	});
+
+	it.each(["preview", "commit"])("shows structured validation details from %s", async (phase) => {
+		authFetchMock.mockResolvedValueOnce({
+			ok: false,
+			status: 400,
+			text: async () =>
+				JSON.stringify({
+					code: "INVALID_IMPORT_DATA",
+					details: { _errors: ["medications.0.name: Required"] },
+				}),
+		});
+		installFileReader('{"version":"1.8","exportedAt":"2026-10-03T12:00:00Z"}');
+		const { result } = createHook();
+		if (phase === "preview") {
+			act(() =>
+				result.current.handleImportFileSelect({
+					target: {
+						files: [new File(["{}"], "invalid.json")],
+						value: "",
+					},
+				} as unknown as React.ChangeEvent<HTMLInputElement>)
+			);
+		} else {
+			act(() => result.current.setPendingImportData({ version: "1.8" }));
+			await act(async () => result.current.handleImportConfirm());
+		}
+		await waitFor(() =>
+			expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
+				message: "exportImport.invalidFile: medications.0.name: Required",
+				tone: "error",
+			})
+		);
+		expect(result.current.pendingImportData).toBeNull();
+		expect(result.current.importResult).toBeNull();
+	});
+
+	it("translates backend size failures without showing raw server errors", async () => {
+		authFetchMock.mockResolvedValueOnce({
+			ok: false,
+			status: 413,
+			text: async () => "Payload Too Large",
+		});
+		const { result } = createHook();
+		act(() => result.current.setPendingImportData({ version: "1.8" }));
+		await act(async () => result.current.handleImportConfirm());
+		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({ message: "exportImport.fileTooLarge", tone: "error" });
+	});
 });

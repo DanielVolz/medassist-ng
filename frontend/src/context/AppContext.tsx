@@ -18,7 +18,6 @@ import { useAppModals } from "./useAppModals";
 import { type DayMedEntry, useAppSchedule } from "./useAppSchedule";
 import { type ImportPreview, type ImportResult, useImportExport } from "./useImportExport";
 
-export type { DayMedEntry } from "./useAppSchedule";
 export type { ImportPreview } from "./useImportExport";
 
 // =============================================================================

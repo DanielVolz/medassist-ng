@@ -731,7 +731,7 @@ describe("useAppContext", () => {
 		expect(window.history.back).not.toHaveBeenCalled();
 	});
 
-	it("shows import error alert when import API returns non-ok response", async () => {
+	it("shows a localized fallback without exposing generic import API errors", async () => {
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 			ok: false,
 			status: 500,
@@ -748,8 +748,9 @@ describe("useAppContext", () => {
 			await result.current.handleImportConfirm();
 		});
 
+		expect(feedbackMock.showFeedback).toHaveBeenCalledTimes(1);
 		expect(feedbackMock.showFeedback).toHaveBeenCalledWith({
-			message: "exportImport.importError: Import failed",
+			message: "exportImport.importError",
 			tone: "error",
 		});
 	});

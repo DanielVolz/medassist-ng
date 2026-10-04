@@ -77,6 +77,20 @@ describe("ExportModal", () => {
 		expect(defaultProps.onExport).toHaveBeenCalledWith(true, true);
 	});
 
+	it("resets sensitive opt-in after closing and reopening", () => {
+		const { rerender } = render(<ExportModal {...defaultProps} />);
+		fireEvent.click(screen.getByLabelText(/exportImport\.includeSensitive/i));
+		expect(screen.getByText(/exportImport\.sensitiveWarning/i)).toBeInTheDocument();
+
+		rerender(<ExportModal {...defaultProps} isOpen={false} />);
+		rerender(<ExportModal {...defaultProps} isOpen />);
+
+		expect(screen.getByLabelText(/exportImport\.includeSensitive/i)).not.toBeChecked();
+		expect(screen.queryByText(/exportImport\.sensitiveWarning/i)).not.toBeInTheDocument();
+		fireEvent.click(screen.getByTestId("export-option-data-only"));
+		expect(defaultProps.onExport).toHaveBeenCalledWith(false, false);
+	});
+
 	it("disables buttons when exporting", () => {
 		render(<ExportModal {...defaultProps} exporting={true} />);
 		expect(screen.getByTestId("export-option-with-images")).toBeDisabled();

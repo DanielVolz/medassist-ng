@@ -89,4 +89,20 @@ describe("useModalHistory", () => {
 		expect(nestedClose).toHaveBeenCalledTimes(1);
 		expect(parentClose).not.toHaveBeenCalled();
 	});
+
+	it("does not let a programmatic child close consume the parent on the resulting popstate", () => {
+		vi.spyOn(window.history, "back").mockImplementation(() => {});
+		const parentClose = vi.fn();
+		const childClose = vi.fn();
+		const { result } = renderHook(() => {
+			useModalHistory(true, "parent", parentClose);
+			return useModalHistory(true, "child", childClose);
+		});
+		act(() => result.current.closeModal());
+		act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+		expect(childClose).toHaveBeenCalledTimes(1);
+		expect(parentClose).not.toHaveBeenCalled();
+		act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+		expect(parentClose).toHaveBeenCalledTimes(1);
+	});
 });

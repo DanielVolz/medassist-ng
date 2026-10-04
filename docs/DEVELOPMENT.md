@@ -34,6 +34,21 @@ docker compose -p medassist-dev -f docker-compose.dev.yml -f docker-compose.medt
 - OpenAPI JSON: `http://localhost:3000/docs/json` when docs are enabled
 - Docs are open in no-auth local development; authenticated setups protect docs by default unless `DOCS_AUTH_REQUIRED=false` is set.
 
+## Local Production-Build Preview
+
+With the backend running separately on port `3000`:
+
+```bash
+npm --prefix frontend run build
+npm --prefix frontend run preview
+```
+
+Preview serves `http://localhost:4174`; development stays on `http://localhost:5173`.
+Both use strict port checking and proxy `/api/*` to the backend (`BACKEND_URL`
+overrides the target). Preview fails if port `4174` is occupied. The backend's
+default CORS allowlist includes both origins; a copied `.env.example` explicitly
+allows only `4174`, so include `5173` when using the dev server too.
+
 ## Playwright Runtime Isolation
 
 Local Playwright runs start their own backend and frontend servers instead of reusing the always-on development stack:

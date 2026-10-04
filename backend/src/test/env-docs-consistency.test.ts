@@ -60,6 +60,12 @@ describe("environment documentation consistency", () => {
 		expect(content).not.toContain(stalePreviewOrigin);
 	});
 
+	it("binds bare Vite preview to the documented port without silently falling back", () => {
+		const viteConfig = readRepoFile("frontend/vite.config.ts");
+		expect(viteConfig).toMatch(/preview:\s*\{\s*port:\s*4174,\s*strictPort:\s*true,/);
+		expect(viteConfig).toMatch(/server:\s*\{\s*port:\s*5173,\s*strictPort:\s*true,/);
+	});
+
 	it("does not mention the removed share stock-status default setting", () => {
 		const content = docsWithDefaultSettings.map(readRepoFile).join("\n");
 

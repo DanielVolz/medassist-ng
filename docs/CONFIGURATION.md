@@ -31,7 +31,9 @@ API docs behavior:
 
 - The `.env.example` file is optimized for the Docker Compose quickstart, where the frontend runs on `http://localhost:4174`.
 - `http://localhost:4174` is the canonical local preview and Docker quickstart frontend origin.
+- `npm --prefix frontend run preview` binds to port `4174` with strict port checking; it fails if that port is occupied instead of silently choosing another origin. Build the frontend first and run the backend separately. Preview retains the `/api/*` proxy and honors `BACKEND_URL`.
 - Local frontend development uses the Vite dev server instead, so the backend schema defaults cover `http://localhost:5173` and `http://localhost:4174`.
+- When copying `.env.example` for both local modes, add `http://localhost:5173` to its explicit `CORS_ORIGINS` value. Isolated Playwright port overrides are test-only and do not change these defaults.
 - If you use a custom hostname or reverse proxy, include that origin in `CORS_ORIGINS`.
 
 ## Authentication

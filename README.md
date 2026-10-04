@@ -18,8 +18,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Backend_Tests-957%2F957-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
-  <img src="https://img.shields.io/badge/Frontend_Tests-1170%2F1170-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
+  <img src="https://img.shields.io/badge/Backend_Tests-1079%2F1079-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
+  <img src="https://img.shields.io/badge/Frontend_Tests-1184%2F1184-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
 </p>
 
 ### 🤖 AI-Generated Code
@@ -222,6 +222,12 @@ ALLOW_UNAUTHENTICATED=true
 Production startup refuses `AUTH_ENABLED=false` unless that local-only override is present.
 
 Open `http://localhost:4174` and start tracking your medications.
+
+For a local source build, Vite development uses `http://localhost:5173`.
+After `npm --prefix frontend run build`, `npm --prefix frontend run preview`
+serves `http://localhost:4174` with the backend running separately. Preview fails
+if its port is occupied rather than switching origins; see
+[local preview setup](docs/DEVELOPMENT.md#local-production-build-preview).
 
 ### Verify Deployment
 

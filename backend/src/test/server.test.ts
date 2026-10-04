@@ -24,10 +24,9 @@ import {
 describe("Index.ts Utility Functions", () => {
 	describe("parseCorsOrigins", () => {
 		it("should parse canonical default development and preview origins", () => {
-			expect(parseCorsOrigins(DEFAULT_CORS_ORIGINS)).toEqual([
-				DEFAULT_DEV_FRONTEND_ORIGIN,
-				DEFAULT_PREVIEW_FRONTEND_ORIGIN,
-			]);
+			expect(parseCorsOrigins(DEFAULT_CORS_ORIGINS)).toEqual(["http://localhost:5173", "http://localhost:4174"]);
+			expect(DEFAULT_DEV_FRONTEND_ORIGIN).toBe("http://localhost:5173");
+			expect(DEFAULT_PREVIEW_FRONTEND_ORIGIN).toBe("http://localhost:4174");
 		});
 
 		it("should parse comma-separated origins", () => {

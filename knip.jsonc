@@ -8,7 +8,7 @@
       "ignoreDependencies": ["pino-pretty"]
     },
     "frontend": {
-      "entry": ["src/main.tsx", "e2e/*.setup.ts"],
+      "entry": ["src/main.tsx", "e2e/*.setup.ts", "playwright.all.config.ts"],
       "ignoreDependencies": ["@fontsource/ibm-plex-mono", "@fontsource/ibm-plex-sans"],
       "ignoreBinaries": ["ffmpeg"]
     },

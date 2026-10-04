@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Settings } from "../../hooks/useSettings";
 import {
+	buildSettingsPayload,
 	normalizeSettingsForComparison,
 	settingsChanged,
 	USER_EDITABLE_SETTINGS_FIELDS,
@@ -75,6 +76,45 @@ function changeEditableField(field: UserEditableSettingsField): Settings {
 }
 
 describe("settings comparison utilities", () => {
+	it("covers every editable PUT field independently of server passthrough and immediate language", () => {
+		const passthrough = ["language", "smtpHost", "smtpPort", "smtpUser", "smtpPass", "smtpFrom", "smtpSecure"];
+		const payloadFields = Object.keys(buildSettingsPayload(baseSettings)).filter(
+			(field) => !passthrough.includes(field)
+		);
+		expect(payloadFields.sort()).toEqual([...USER_EDITABLE_SETTINGS_FIELDS].sort());
+	});
+
+	it.each(
+		Object.keys(baseSettings).filter(
+			(field) => !USER_EDITABLE_SETTINGS_FIELDS.includes(field as UserEditableSettingsField)
+		)
+	)("excludes independently changed %s from dirty comparison", (field) => {
+		const value = baseSettings[field as keyof Settings];
+		const changed = { ...baseSettings, [field]: typeof value === "boolean" ? !value : "changed" };
+		expect(settingsChanged(baseSettings, changed as Settings)).toBe(false);
+	});
+
+	it("preserves channel normalization, repeat reminders and optional SMTP password", () => {
+		const settings = { ...baseSettings, emailEnabled: true, shoutrrrEnabled: true, repeatDailyReminders: true };
+		expect(buildSettingsPayload(settings)).toMatchObject({
+			emailEnabled: false,
+			shoutrrrEnabled: false,
+			repeatDailyReminders: false,
+			smtpPass: undefined,
+		});
+		expect(buildSettingsPayload({ ...settings, notificationEmail: " user@example.com " })).toMatchObject({
+			emailEnabled: true,
+			repeatDailyReminders: true,
+		});
+		expect(
+			buildSettingsPayload({ ...settings, shoutrrrUrl: " https://example.com ", smtpPass: "local-test" })
+		).toMatchObject({
+			shoutrrrEnabled: true,
+			repeatDailyReminders: true,
+			smtpPass: "local-test",
+		});
+	});
+
 	it("documents the one canonical list of user-editable settings fields", () => {
 		expect([...USER_EDITABLE_SETTINGS_FIELDS]).toEqual([
 			"timezone",

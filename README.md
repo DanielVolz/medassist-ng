@@ -223,6 +223,12 @@ Production startup refuses `AUTH_ENABLED=false` unless that local-only override 
 
 Open `http://localhost:4174` and start tracking your medications.
 
+For a local source build, Vite development uses `http://localhost:5173`.
+After `npm --prefix frontend run build`, `npm --prefix frontend run preview`
+serves `http://localhost:4174` with the backend running separately. Preview fails
+if its port is occupied rather than switching origins; see
+[local preview setup](docs/DEVELOPMENT.md#local-production-build-preview).
+
 ### Verify Deployment
 
 After the containers start, confirm the stack is actually healthy:

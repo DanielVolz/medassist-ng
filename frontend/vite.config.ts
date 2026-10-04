@@ -99,6 +99,10 @@ export default defineConfig({
 			},
 		},
 	},
+	preview: {
+		port: 4174,
+		strictPort: true,
+	},
 	server: {
 		port: 5173,
 		strictPort: true,

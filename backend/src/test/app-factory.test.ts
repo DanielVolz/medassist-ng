@@ -33,6 +33,24 @@ vi.mock("../plugins/env.js", () => ({
 		RATE_LIMIT_MAX: DEFAULT_RATE_LIMIT_MAX,
 	},
 }));
+vi.mock("../services/intake-reminder-scheduler.js", () => ({
+	startIntakeReminderScheduler: vi.fn(),
+}));
+vi.mock("../services/medication-enrichment.js", () => ({
+	MEDICATION_ENRICHMENT_SEARCH_DEFAULT_LIMIT: 6,
+	MEDICATION_ENRICHMENT_SEARCH_MAX_LIMIT: 20,
+	MedicationEnrichmentServiceError: class extends Error {},
+	enrichMedicationSelection: vi.fn(),
+	startMedicationEnrichmentService: vi.fn(),
+	searchMedicationEnrichment: vi.fn(),
+}));
+vi.mock("../services/reminder-scheduler.js", () => ({
+	startReminderScheduler: vi.fn(),
+}));
+
+import { startIntakeReminderScheduler } from "../services/intake-reminder-scheduler.js";
+import { startMedicationEnrichmentService } from "../services/medication-enrichment.js";
+import { startReminderScheduler } from "../services/reminder-scheduler.js";
 
 const { createApp } = await import("../app/createApp.js");
 
@@ -47,7 +65,7 @@ function createImagesDir(): string {
 async function buildProbeApp(options?: CreateAppOptions): Promise<FastifyInstance> {
 	const app = await createApp({
 		...options,
-		logLevel: "silent",
+		logLevel: options?.logLevel ?? "silent",
 		imagesDir: options?.imagesDir ?? createImagesDir(),
 	});
 	app.get("/bootstrap-test/probe", async () => ({ ok: true }));
@@ -95,11 +113,14 @@ describe("createApp bootstrap defaults", () => {
 		}
 	});
 
-	it("does not listen when imported and constructed for tests", async () => {
+	it("does not listen or start runtime schedulers when imported and constructed", async () => {
 		const app = await buildProbeApp();
 
 		try {
 			expect(app.server.listening).toBe(false);
+			expect(startReminderScheduler).not.toHaveBeenCalled();
+			expect(startMedicationEnrichmentService).not.toHaveBeenCalled();
+			expect(startIntakeReminderScheduler).not.toHaveBeenCalled();
 		} finally {
 			await app.close();
 		}
@@ -137,6 +158,24 @@ describe("createApp bootstrap defaults", () => {
 			await expectCorsWithholdsAllowOriginForUnconfiguredBrowserOrigin(app);
 		} finally {
 			await app.close();
+		}
+	});
+
+	it("redacts share tokens in request URLs through the production request serializer", async () => {
+		const writes: string[] = [];
+		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+			writes.push(String(chunk));
+			return true;
+		});
+		const app = await buildProbeApp({ logLevel: "info" });
+
+		try {
+			await app.inject({ method: "GET", url: "/share/0123456789abcdef" });
+			expect(writes.join("")).toContain("/share/[share-token]");
+			expect(writes.join("")).not.toContain("/share/0123456789abcdef");
+		} finally {
+			await app.close();
+			writeSpy.mockRestore();
 		}
 	});
 
@@ -186,6 +225,31 @@ describe("createApp bootstrap defaults", () => {
 		} finally {
 			await defaultApp.close();
 			await runtimeApp.close();
+		}
+	});
+
+	it("applies an explicit runtime rate-limit override through the shared factory", async () => {
+		const parsedEnv = EnvSchema.parse({ NODE_ENV: "production", RATE_LIMIT_MAX: "3" });
+		const runtimeOptions = buildRuntimeAppOptions(
+			{
+				...parsedEnv,
+				OPENAPI_DOCS_ENABLED: false,
+				DOCS_AUTH_REQUIRED: false,
+			},
+			createImagesDir()
+		);
+		const app = await buildProbeApp(runtimeOptions);
+
+		try {
+			expect(runtimeOptions.rateLimitMax).toBe(3);
+			for (let index = 0; index < 3; index += 1) {
+				const response = await app.inject({ method: "GET", url: "/bootstrap-test/probe" });
+				expect(response.statusCode).toBe(200);
+			}
+			const limitedResponse = await app.inject({ method: "GET", url: "/bootstrap-test/probe" });
+			expect(limitedResponse.statusCode).toBe(429);
+		} finally {
+			await app.close();
 		}
 	});
 });

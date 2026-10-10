@@ -110,6 +110,10 @@
 	text-transform: uppercase;
 }
 
+:global([data-theme="light"]) .form label {
+	color: var(--text-muted);
+}
+
 .form :global(.full) {
 	grid-column: 1 / -1;
 }

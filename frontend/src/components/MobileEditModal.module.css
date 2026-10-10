@@ -151,6 +151,10 @@
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+:global([data-theme="light"]) .tabActive {
+	color: var(--text-primary);
+}
+
 .swipeHint {
 	display: flex;
 	align-items: center;
@@ -305,6 +309,10 @@
 	line-height: 1.35;
 }
 
+:global([data-theme="light"]) .form .sectionCard :global(label) {
+	color: var(--text-muted);
+}
+
 .sectionCard :global(label input),
 .sectionCard :global(label select),
 .sectionCard :global(label textarea),
@@ -353,6 +361,10 @@
 	color: var(--text-secondary);
 	font-size: 0.75rem;
 	font-weight: 500;
+}
+
+:global([data-theme="light"]) .form .intakeRow :global(label.compact) span {
+	color: var(--text-muted);
 }
 
 .intakeRow :global(label.compact.full-row) {

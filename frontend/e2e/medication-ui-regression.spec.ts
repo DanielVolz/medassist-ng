@@ -184,10 +184,45 @@ async function checkEditorGeometry(
 	}
 }
 
+function getRelativeLuminance(color: string): number {
+	const channels = color.match(/\d+(?:\.\d+)?/g)?.map(Number);
+	if (!channels || channels.length < 3) {
+		throw new Error(`Expected an RGB color, received "${color}"`);
+	}
+
+	const linearChannels = channels.slice(0, 3).map((channel) => {
+		const normalized = channel / 255;
+		return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+	});
+
+	return linearChannels[0] * 0.2126 + linearChannels[1] * 0.7152 + linearChannels[2] * 0.0722;
+}
+
+async function expectEnrichmentButtonContrast(editor: Awaited<ReturnType<typeof openEditor>>) {
+	const button = editor.locator(".medication-enrichment-toggle-button");
+	await expect(button).toBeVisible();
+	const { background, foreground } = await button.evaluate((element) => {
+		const styles = getComputedStyle(element);
+		return { background: styles.backgroundColor, foreground: styles.color };
+	});
+	const luminances = [getRelativeLuminance(background), getRelativeLuminance(foreground)].sort(
+		(left, right) => right - left
+	);
+	const contrast = (luminances[0] + 0.05) / (luminances[1] + 0.05);
+
+	expect(
+		contrast,
+		`Visible enrichment button contrast is ${contrast.toFixed(2)}:1 (foreground ${foreground}, background ${background})`
+	).toBeGreaterThanOrEqual(4.5);
+}
+
 async function expectEditorAxeAudit(
 	page: Parameters<typeof navigateTo>[0],
 	view: keyof typeof reviewedAxeFindingsByView
 ) {
+	const editor = page.locator('[data-ui-a11y-scope="true"]');
+	await expect(editor).toBeVisible();
+	await expectEnrichmentButtonContrast(editor);
 	const results = await new AxeBuilder({ page })
 		.include('[data-ui-a11y-scope="true"]')
 		.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])

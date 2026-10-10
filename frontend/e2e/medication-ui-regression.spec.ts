@@ -29,16 +29,18 @@ const reviewedAxeFindingsByView: Record<string, string[]> = {
 	mobile: ['label|input[accept="image/*"]'],
 };
 type AxeDiagnosticTarget = {
-	selector: string;
+	selector: string | null;
 	safeTarget: string;
 	contrast: Array<Record<string, string | number>>;
 };
 
-function safeAxeTarget(selector: string) {
-	return selector
-		.replace(/\[(?:value|placeholder|aria-label|name|title)\s*=\s*(?:"[^"]*"|'[^']*'|[^\]]*)\]/gi, "")
-		.replace(/\s+/g, " ")
-		.slice(0, 240);
+function safeAxeTarget(selector: string | string[]) {
+	const sanitize = (value: string) =>
+		value
+			.replace(/\[(?:value|placeholder|aria-label|name|title)\s*=\s*(?:"[^"]*"|'[^']*'|[^\]]*)\]/gi, "")
+			.replace(/\s+/g, " ")
+			.slice(0, 240);
+	return typeof selector === "string" ? sanitize(selector) : JSON.stringify(selector.map(sanitize));
 }
 
 function axeContrastData(check: { data?: unknown }) {
@@ -140,10 +142,12 @@ async function attachFailureDiagnostics(
 				],
 				axeTargets: targets.slice(0, 24).map((target) => {
 					let element: Element | null = null;
-					try {
-						element = document.querySelector(target.selector);
-					} catch {
-						// Invalid Axe selectors are reported without DOM-derived details.
+					if (target.selector !== null) {
+						try {
+							element = document.querySelector(target.selector);
+						} catch {
+							// Invalid Axe selectors are reported without DOM-derived details.
+						}
 					}
 					return {
 						target: target.safeTarget,
@@ -505,7 +509,7 @@ test.describe("Medication editor UI regressions", () => {
 								.map(axeContrastData)
 								.filter((data) => Object.keys(data).length > 0);
 							return node.target.map((selector) => ({
-								selector,
+								selector: typeof selector === "string" ? selector : null,
 								safeTarget: safeAxeTarget(selector),
 								contrast,
 							}));

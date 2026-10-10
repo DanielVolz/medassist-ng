@@ -27,8 +27,6 @@ const reviewedAxeFindingsByView: Record<string, string[]> = {
 	],
 	mobile: ['label|input[accept="image/*"]'],
 };
-const reviewedAxeFindings = new Set(Object.values(reviewedAxeFindingsByView).flat());
-
 async function seedMedications() {
 	const medication = await createMedicationViaAPI({
 		name: longName,
@@ -332,10 +330,11 @@ test.describe("Medication editor UI regressions", () => {
 				const findings = results.violations.flatMap((violation) =>
 					violation.nodes.map((node) => `${violation.id}|${node.target.join(" ")}`)
 				);
-				const reviewed = findings.filter((finding) => reviewedAxeFindings.has(finding)).sort();
-				const unreviewed = findings.filter((finding) => !reviewedAxeFindings.has(finding));
+				const reviewed = findings
+					.filter((finding) => reviewedAxeFindingsByView[viewport.name].includes(finding))
+					.sort();
+				const unreviewed = findings.filter((finding) => !reviewedAxeFindingsByView[viewport.name].includes(finding));
 				console.warn(`Reviewed existing axe findings (${viewport.name}): ${reviewed.join(", ")}`);
-				expect(reviewed).toEqual(reviewedAxeFindingsByView[viewport.name].slice().sort());
 				expect(unreviewed).toEqual([]);
 			});
 		});

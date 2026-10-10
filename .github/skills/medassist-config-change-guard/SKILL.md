@@ -1,11 +1,11 @@
 ---
 name: medassist-config-change-guard
-description: Validate MedAssist configuration changes across env vars, Docker compose, proxy settings, and runtime defaults, including equivalent requests phrased in German.
+description: Validate MedAssist configuration changes across env vars, Docker compose, proxy settings, runtime defaults, and MCP server connections, including equivalent requests phrased in German.
 ---
 
 # Skill Instructions
 
-Use this skill when changes touch `.env`, Docker files, Vite proxy settings, runtime defaults, or app startup behavior.
+Use this skill when changes touch `.env`, Docker files, Vite proxy settings, runtime defaults, app startup behavior, or MCP configuration.
 
 ## Objective
 
@@ -18,10 +18,12 @@ Prevent configuration drift and broken local/CI environments.
 3. Docker/dev runtime changes remain consistent across services.
 4. Frontend/backend URL/proxy conventions remain valid (`/api/*`).
 5. Documentation reflects configuration changes.
+6. For MCP changes, perform an actual harmless tool call, not only discovery. Distinguish a running server from tools exposed to the active agent. Verify GitHub with a repository-scoped read and SQLite with `SELECT 1`; never inspect private records merely to test connectivity.
 
 ## Files to Prioritize
 
 - `.env.example`
+- `.mcp.json` and its launcher scripts
 - `docker-compose.yml`
 - `docker-compose.dev.yml`
 - `frontend/vite.config.ts`

@@ -65,6 +65,8 @@ Normal agents must never run commands that publish or modify remote repository s
 
 For explicit push, PR, merge, tag, or release requests, the normal agent's required action is to hand off to `@release-manager`. Do not treat quoting or summarizing these instructions as completion. Do not push even if the user says "push it".
 
+The release manager may and should use the authenticated `gh` CLI when available, including OS-keyring authentication. Agent or skill guidance must not prohibit this transport. Missing MCP tools or token environment variables are not proof of missing GitHub access. An access blocker requires an actual failed operation and its error. For an authorized green PR, completion requires executing the merge and verifying `MERGED`; reporting merge readiness alone is not completion.
+
 ## Scope And Branching
 
 - One PR per logical change: one feature, one bug fix, one refactor, or one docs update.
@@ -101,10 +103,11 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 ## MCP Tool Safety
 
 - Read `.mcp.json` for the intended workspace MCP servers when a task needs external tools; confirm runtime tool discovery before claiming a server is available. Other profile/session tools may exist outside this file.
-- The workspace GitHub MCP endpoint `/mcp/x/all` exposes all available GitHub toolsets, including write tools. Only `project-bot` and `release-manager` are explicitly granted `github/*`; tool availability is not authorization to mutate remote state.
+- GitHub MCP uses the official Docker/stdio server through `scripts/mcp-github.mjs`, which passes the GitHub CLI's locally stored credential only into the server environment. Do not shadow it with an unverified workspace HTTP connection or store tokens in repository files. Only `project-bot` and `release-manager` are explicitly granted `github/*`; tool availability is not authorization to mutate remote state.
 - Treat MCP integrations as read-only by default. Use the narrowest available permissions and only connect servers needed for the current task.
 - Do not invoke write-capable MCP actions without an explicit user request for that mutation. Existing specialist ownership and prohibited remote operations still apply; MCP is not a bypass for release or project workflows.
 - Inspect SQLite or other databases read-only unless the user explicitly requests a data change. Never use MCP to bypass application authorization or modify production data as a side effect of diagnosis.
+- The workspace SQLite launcher opens the source read-only and exposes only read tools on a private temporary snapshot. Restart that server to refresh its snapshot. Do not point `db-mcp --sqlite-native` directly at the original database: it enables WAL on startup.
 - Do not put credentials, tokens, private keys, or database contents in prompts, memory, committed configuration, or shared logs. Use local secret storage or environment variables for server credentials and avoid exposing sensitive tool output.
 - For CI use GitHub read tools; for browser verification follow the CI Triage and Authenticated UI Verification rules below.
 
@@ -196,7 +199,7 @@ Before each task, infer applicable skills from intent and touched paths, then re
 | Frontend UI/text changes | `UI Consistency`, `i18n Enforcer` |
 | Visual polish only | `UI Consistency`, then `Frontend Polish` |
 | Notification behavior/scheduler/startup/error paths | `Observability Guard` plus `Security Sanity` if external input/auth involved |
-| Env/Docker/proxy/runtime config | `Config Change Guard` |
+| Env/Docker/proxy/runtime config or MCP connections | `Config Change Guard` |
 | Behavior/setup/workflow docs | `Doc Sync Guard` |
 | Broad test planning, test writing, test execution, or CI test failure request | `Testing Handoff` |
 | Test planning, test writing, or changing tests | `Test Design` |

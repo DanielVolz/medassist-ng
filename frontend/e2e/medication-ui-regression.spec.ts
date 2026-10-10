@@ -98,13 +98,16 @@ async function checkEditorGeometry(
 	editor: Awaited<ReturnType<typeof openEditor>>,
 	page: Parameters<typeof navigateTo>[0]
 ) {
-	const geometry = await editor.evaluate((element) => {
+	const geometry = await editor.evaluate((element, expectedHeadingText) => {
 		const bounds = (target: Element | null) => {
 			if (!target) return null;
 			const rect = target.getBoundingClientRect();
 			return { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top };
 		};
-		const heading = element.querySelector("h2");
+		const heading =
+			Array.from(element.querySelectorAll("h2")).find(
+				(candidate) => candidate.textContent?.includes(expectedHeadingText) && !candidate.querySelector("button")
+			) ?? null;
 		const back = Array.from(element.querySelectorAll("button")).find((button) =>
 			/^Back$/i.test(button.textContent?.trim() ?? "")
 		);
@@ -133,6 +136,7 @@ async function checkEditorGeometry(
 			editor: bounds(element),
 			form: bounds(form ?? null),
 			name: bounds(name ?? null),
+			headingFound: heading !== null,
 			viewport: { height: window.innerHeight, width: window.innerWidth },
 			headingTextOverlapsBack: headingTextBoxes.some(
 				(text) =>
@@ -143,8 +147,9 @@ async function checkEditorGeometry(
 					text.bottom > backBox.top
 			),
 		};
-	});
+	}, longName);
 
+	expect(geometry.headingFound, "Medication editor title heading was not found").toBe(true);
 	expect(geometry.form).not.toBeNull();
 	expect(geometry.name).not.toBeNull();
 	expect(geometry.editor!.left).toBeGreaterThanOrEqual(0);

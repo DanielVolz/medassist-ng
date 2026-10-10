@@ -14,19 +14,17 @@ test("rejects invalid and conflicting shard counts and preserves repeat argument
 		["--shards=0"],
 		["--shards=3"],
 		["--shards=1", "--shards=2"],
-		["--shards=2", "--update-snapshots"],
 		["--repeat-each=0"],
+		["--unknown-option"],
 	]) {
 		assert.throws(() => parseOptions(args));
 	}
 	assert.throws(() => parseOptions([], { PLAYWRIGHT_UI_SHARDS: "3" }));
 	assert.deepEqual(parseOptions(["--repeat-each=2"]), {
 		shards: 1,
-		updateSnapshots: false,
 		repeatArgs: ["--repeat-each=2"],
 		cache: true,
 	});
-	assert.equal(parseOptions(["--update-snapshots"]).shards, 1);
 });
 
 test("dependency caches are locked, shard-specific, and optional", () => {
@@ -48,7 +46,6 @@ test("dependency caches are locked, shard-specific, and optional", () => {
 test("builds shard-specific Docker resources, Playwright selection, and report paths", () => {
 	const options = {
 		shards: 2,
-		updateSnapshots: false,
 		repeatArgs: ["--repeat-each=2"],
 	};
 	const first = createShardPlan(1, 2, "run-123", options);

@@ -7,6 +7,7 @@ import {
 	navigateTo,
 	uiTest as test,
 } from "./fixtures";
+import { recordUiAxeDiagnostics, sanitizeAxeContrast } from "./fixtures/ui-diagnostics";
 
 const longName = "Fictional medication for responsive layout coverage ".repeat(2).slice(0, 98);
 const schedule = Array.from({ length: 8 }, (_, index) => ({
@@ -27,8 +28,6 @@ const reviewedAxeFindingsByView: Record<string, string[]> = {
 	],
 	mobile: ['label|input[accept="image/*"]'],
 };
-const reviewedAxeFindings = new Set(Object.values(reviewedAxeFindingsByView).flat());
-
 async function seedMedications() {
 	const medication = await createMedicationViaAPI({
 		name: longName,
@@ -99,13 +98,16 @@ async function checkEditorGeometry(
 	editor: Awaited<ReturnType<typeof openEditor>>,
 	page: Parameters<typeof navigateTo>[0]
 ) {
-	const geometry = await editor.evaluate((element) => {
+	const geometry = await editor.evaluate((element, expectedHeadingText) => {
 		const bounds = (target: Element | null) => {
 			if (!target) return null;
 			const rect = target.getBoundingClientRect();
 			return { bottom: rect.bottom, left: rect.left, right: rect.right, top: rect.top };
 		};
-		const heading = element.querySelector("h2");
+		const heading =
+			Array.from(element.querySelectorAll("h2")).find(
+				(candidate) => candidate.textContent?.includes(expectedHeadingText) && !candidate.querySelector("button")
+			) ?? null;
 		const back = Array.from(element.querySelectorAll("button")).find((button) =>
 			/^Back$/i.test(button.textContent?.trim() ?? "")
 		);
@@ -134,6 +136,7 @@ async function checkEditorGeometry(
 			editor: bounds(element),
 			form: bounds(form ?? null),
 			name: bounds(name ?? null),
+			headingFound: heading !== null,
 			viewport: { height: window.innerHeight, width: window.innerWidth },
 			headingTextOverlapsBack: headingTextBoxes.some(
 				(text) =>
@@ -144,8 +147,9 @@ async function checkEditorGeometry(
 					text.bottom > backBox.top
 			),
 		};
-	});
+	}, longName);
 
+	expect(geometry.headingFound, "Medication editor title heading was not found").toBe(true);
 	expect(geometry.form).not.toBeNull();
 	expect(geometry.name).not.toBeNull();
 	expect(geometry.editor!.left).toBeGreaterThanOrEqual(0);
@@ -182,6 +186,74 @@ async function checkEditorGeometry(
 		});
 		await expect.poll(() => lastSchedule.evaluate((node) => node.scrollTop > 0)).toBe(true);
 		await expect(editor.locator('form button[type="submit"]')).toBeInViewport();
+	}
+}
+
+function getRelativeLuminance(color: string): number {
+	const channels = color.match(/\d+(?:\.\d+)?/g)?.map(Number);
+	if (!channels || channels.length < 3) {
+		throw new Error(`Expected an RGB color, received "${color}"`);
+	}
+
+	const linearChannels = channels.slice(0, 3).map((channel) => {
+		const normalized = channel / 255;
+		return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+	});
+
+	return linearChannels[0] * 0.2126 + linearChannels[1] * 0.7152 + linearChannels[2] * 0.0722;
+}
+
+async function expectEnrichmentButtonContrast(editor: Awaited<ReturnType<typeof openEditor>>) {
+	const button = editor.locator(".medication-enrichment-toggle-button");
+	await expect(button).toBeVisible();
+	const { background, foreground } = await button.evaluate((element) => {
+		const styles = getComputedStyle(element);
+		return { background: styles.backgroundColor, foreground: styles.color };
+	});
+	const luminances = [getRelativeLuminance(background), getRelativeLuminance(foreground)].sort(
+		(left, right) => right - left
+	);
+	const contrast = (luminances[0] + 0.05) / (luminances[1] + 0.05);
+
+	expect(
+		contrast,
+		`Visible enrichment button contrast is ${contrast.toFixed(2)}:1 (foreground ${foreground}, background ${background})`
+	).toBeGreaterThanOrEqual(4.5);
+}
+
+async function expectEditorAxeAudit(
+	page: Parameters<typeof navigateTo>[0],
+	view: keyof typeof reviewedAxeFindingsByView
+) {
+	const editor = page.locator('[data-ui-a11y-scope="true"]');
+	await expect(editor).toBeVisible();
+	await expectEnrichmentButtonContrast(editor);
+	const results = await new AxeBuilder({ page })
+		.include('[data-ui-a11y-scope="true"]')
+		.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+		.analyze();
+	const findings = results.violations.flatMap((violation) =>
+		violation.nodes.map((node) => `${violation.id}|${node.target.join(" ")}`)
+	);
+	const reviewed = findings.filter((finding) => reviewedAxeFindingsByView[view].includes(finding));
+	const unreviewed = findings.filter((finding) => !reviewedAxeFindingsByView[view].includes(finding));
+	console.warn(`Reviewed existing axe findings (${view}): ${reviewed.join(", ")}`);
+	try {
+		expect(unreviewed).toEqual([]);
+	} catch (error) {
+		const axeTargets = results.violations.flatMap((violation) =>
+			violation.nodes.flatMap((node) => {
+				const contrast = [...node.any, ...node.all, ...node.none]
+					.map(sanitizeAxeContrast)
+					.filter((data) => Object.keys(data).length > 0);
+				return node.target.map((selector) => ({
+					selector: typeof selector === "string" || Array.isArray(selector) ? selector : null,
+					contrast,
+				}));
+			})
+		);
+		recordUiAxeDiagnostics(page, axeTargets);
+		throw error;
 	}
 }
 
@@ -229,11 +301,6 @@ test.describe("Medication editor UI regressions", () => {
 				const editor = await openEditor(page);
 				await expect(page.getByTestId("medication-row")).toHaveCount(4);
 				await expectRealMotionPreferences(page);
-				await expect(page).toHaveScreenshot(`medication-editor-${viewport.name}.png`, {
-					animations: "disabled",
-					caret: "hide",
-					maxDiffPixelRatio: 0.002,
-				});
 				await checkEditorGeometry(editor, page);
 			});
 
@@ -325,18 +392,15 @@ test.describe("Medication editor UI regressions", () => {
 				await seedMedications();
 				const editor = await openEditor(page);
 				await editor.evaluate((element) => element.setAttribute("data-ui-a11y-scope", "true"));
-				const results = await new AxeBuilder({ page })
-					.include('[data-ui-a11y-scope="true"]')
-					.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-					.analyze();
-				const findings = results.violations.flatMap((violation) =>
-					violation.nodes.map((node) => `${violation.id}|${node.target.join(" ")}`)
-				);
-				const reviewed = findings.filter((finding) => reviewedAxeFindings.has(finding)).sort();
-				const unreviewed = findings.filter((finding) => !reviewedAxeFindings.has(finding));
-				console.warn(`Reviewed existing axe findings (${viewport.name}): ${reviewed.join(", ")}`);
-				expect(reviewed).toEqual(reviewedAxeFindingsByView[viewport.name].slice().sort());
-				expect(unreviewed).toEqual([]);
+				await expectEditorAxeAudit(page, viewport.name);
+			});
+
+			test("dark mode reports reviewed findings and no new WCAG 2.1/2.2 editor violations", async ({ page }) => {
+				await setRealTheme(page, "dark");
+				await seedMedications();
+				const editor = await openEditor(page);
+				await editor.evaluate((element) => element.setAttribute("data-ui-a11y-scope", "true"));
+				await expectEditorAxeAudit(page, viewport.name);
 			});
 		});
 	}

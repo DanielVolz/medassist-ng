@@ -58,6 +58,14 @@ jobs:
               - 'docker-compose.dev.yml'
               - '.github/workflows/container-smoke.yml'
               - '.github/workflows/docker-build.yml'
+            e2e:
+              - 'backend/**'
+              - 'frontend/**'
+              - 'shared/**'
+              - 'package.json'
+              - 'release-policy.json'
+              - 'biome.json'
+              - '.github/workflows/e2e.yml'
 
       - name: Wait for required PR checks
         id: pr_required_check_gate
@@ -68,8 +76,14 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const ref = context.payload.pull_request.head.sha;
+            const e2eRelevant = '${{ steps.pr_changes.outputs.e2e }}' === 'true';
             const requiredChecks = ['Backend Tests', 'Frontend Build'];
-            const e2eLaneChecks = ['Playwright E2E core (core-a)', 'Playwright E2E core (core-b)', 'Playwright E2E data'];
+            const e2eLaneChecks = [
+              'Playwright E2E core (core-a)',
+              'Playwright E2E core (core-b)',
+              'Playwright E2E data',
+              'Playwright E2E medication UI',
+            ];
             const legacyE2ECheck = 'Playwright E2E';
             const terminalFailures = new Set(['action_required', 'cancelled', 'failure', 'neutral', 'skipped', 'stale', 'startup_failure', 'timed_out']);
             const maxAttempts = 80;
@@ -117,38 +131,45 @@ jobs:
                 waitingFor.push(checkName);
               }
 
-              const e2eLanes = e2eLaneChecks.map((checkName) => ({
-                checkName,
-                check: Array.from(checkMap.entries()).find(
-                  ([name]) => name === checkName || name.endsWith(` / ${checkName}`)
-                )?.[1],
-              }));
-              const legacyE2ERun = Array.from(checkMap.entries()).find(
-                ([name]) => name === legacyE2ECheck || name.endsWith(` / ${legacyE2ECheck}`)
-              )?.[1];
-              const e2eSucceeded =
-                e2eLanes.every(({ check }) => check?.conclusion === 'success') ||
-                legacyE2ERun?.conclusion === 'success' ||
-                legacyE2EStatus?.state === 'success';
-
-              for (const { checkName, check } of e2eLanes) {
-                core.info(`${checkName}: ${check?.status ?? 'missing'} / ${check?.conclusion ?? 'pending'}`);
-              }
-              core.info(`${legacyE2ECheck} check run: ${legacyE2ERun?.status ?? 'missing'} / ${legacyE2ERun?.conclusion ?? 'pending'}`);
-              core.info(`${legacyE2ECheck} commit status: ${legacyE2EStatus?.state ?? 'missing'}`);
-
-              if (e2eSucceeded) {
-                core.info('Playwright E2E: success');
-              } else if (
-                e2eLanes.some(({ check }) => check?.conclusion && terminalFailures.has(check.conclusion)) ||
-                (legacyE2ERun?.conclusion && terminalFailures.has(legacyE2ERun.conclusion)) ||
-                ['error', 'failure'].includes(legacyE2EStatus?.state)
-              ) {
-                core.info('Playwright E2E concluded unsuccessfully; skipping Container Smoke because the PR is already blocked.');
-                core.setOutput('should_run', 'false');
-                return;
+              if (!e2eRelevant) {
+                core.info('Playwright E2E: not relevant; preserving the workflow skip behavior.');
               } else {
-                waitingFor.push(legacyE2ECheck);
+                const e2eLanes = e2eLaneChecks.map((checkName) => ({
+                  checkName,
+                  check: Array.from(checkMap.entries()).find(
+                    ([name]) => name === checkName || name.endsWith(` / ${checkName}`)
+                  )?.[1],
+                }));
+
+                for (const { checkName, check } of e2eLanes) {
+                  core.info(`${checkName}: ${check?.status ?? 'missing'} / ${check?.conclusion ?? 'pending'}`);
+                }
+                core.info(`${legacyE2ECheck} commit status: ${legacyE2EStatus?.state ?? 'missing'}`);
+
+                if (['error', 'failure'].includes(legacyE2EStatus?.state)) {
+                  core.info(`${legacyE2ECheck} commit status failed; skipping Container Smoke even if its publisher check run succeeded.`);
+                  core.setOutput('should_run', 'false');
+                  return;
+                }
+
+                if (e2eLanes.some(({ check }) => check?.conclusion && terminalFailures.has(check.conclusion))) {
+                  core.info('A Playwright E2E lane concluded unsuccessfully; skipping Container Smoke because the PR is already blocked.');
+                  core.setOutput('should_run', 'false');
+                  return;
+                }
+
+                for (const { checkName, check } of e2eLanes) {
+                  if (check?.conclusion !== 'success') {
+                    waitingFor.push(checkName);
+                  }
+                }
+                if (legacyE2EStatus?.state !== 'success') {
+                  waitingFor.push(legacyE2ECheck);
+                }
+
+                if (e2eLanes.every(({ check }) => check?.conclusion === 'success') && legacyE2EStatus?.state === 'success') {
+                  core.info('Playwright E2E: all four lanes and the legacy commit status succeeded.');
+                }
               }
 
               if (waitingFor.length === 0) {

@@ -1013,6 +1013,14 @@ button.has-validation-error {
 		background 160ms ease;
 }
 
+.medication-enrichment-toggle-button[data-variant="filled"] {
+	--button-color: var(--button-success-text) !important;
+}
+
+[data-theme="light"] .medication-enrichment-toggle-button[data-variant="filled"] {
+	--button-bg: var(--mantine-color-brand-8) !important;
+}
+
 @keyframes medication-enrichment-spin {
 	from {
 		transform: rotate(0deg);

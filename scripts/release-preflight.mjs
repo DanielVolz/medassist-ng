@@ -173,8 +173,32 @@ function validateContainerSmokeWorkflow(workflowPath) {
     fail(`${workflowPath} must recognize exact and reusable-workflow-suffixed required check names.`);
   }
 
-  if (!workflow.includes("const e2eLaneChecks = ['Playwright E2E core (core-a)', 'Playwright E2E core (core-b)', 'Playwright E2E data'];")) {
-    fail(`${workflowPath} must require successful core-a, core-b, and data Playwright E2E lanes.`);
+  const requiredE2eLanes = [
+    'Playwright E2E core (core-a)',
+    'Playwright E2E core (core-b)',
+    'Playwright E2E data',
+    'Playwright E2E medication UI',
+  ];
+  if (
+    !workflow.includes('const e2eLaneChecks = [') ||
+    !requiredE2eLanes.every((lane) => workflow.includes(`'${lane}'`))
+  ) {
+    fail(`${workflowPath} must require all four Playwright E2E lanes.`);
+  }
+
+  if (
+    !workflow.includes("const e2eRelevant = '${{ steps.pr_changes.outputs.e2e }}' === 'true';") ||
+    !workflow.includes('if (!e2eRelevant)')
+  ) {
+    fail(`${workflowPath} must preserve E2E skip behavior for non-E2E-relevant changes.`);
+  }
+
+  if (
+    !workflow.includes("if (check?.conclusion !== 'success')") ||
+    !workflow.includes("if (['error', 'failure'].includes(legacyE2EStatus?.state))") ||
+    workflow.includes('legacyE2ERun')
+  ) {
+    fail(`${workflowPath} must require every E2E lane and honor legacy commit-status failures without a check-run fallback.`);
   }
 
   if (!workflow.includes('github.rest.repos.getCombinedStatusForRef')) {

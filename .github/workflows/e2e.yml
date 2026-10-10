@@ -192,3 +192,63 @@ jobs:
           name: playwright-data-results
           path: frontend/test-results/
           retention-days: 7
+
+  e2e-ui:
+    name: Playwright E2E medication UI
+    needs: changes
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --platform linux/amd64
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            shared/package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install shared dependencies and build contracts
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        run: npm ci --prefix shared && npm run build --prefix shared
+
+      - name: Install backend and frontend dependencies
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        run: npm ci --prefix backend && npm ci --prefix frontend
+
+      - name: Run medication UI functional and accessibility checks
+        if: needs.changes.outputs.e2e_relevant == 'true'
+        run: npm run test:e2e:ci:ui --prefix frontend
+        env:
+          CI: true
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_WORKERS: 1
+          PLAYWRIGHT_AUTH_FILE: /tmp/medassist-ui-auth/user.json
+          PLAYWRIGHT_DATA_DIR: /tmp/medassist-ui-e2e-data
+          PLAYWRIGHT_OUTPUT_DIR: test-results/ui-e2e
+          PLAYWRIGHT_UI_TESTS: true
+
+      - name: Upload sanitized medication UI failure evidence
+        if: always() && needs.changes.outputs.e2e_relevant == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: medication-ui-failure-evidence
+          path: |
+            frontend/test-results/ui-e2e/**/*.png
+            frontend/test-results/ui-e2e/**/*.webm
+            frontend/test-results/ui-e2e/**/ui-safe-diagnostics*.json
+            frontend/test-results/ui-e2e/*/attachments/ui-safe-diagnostics-*.json
+          if-no-files-found: ignore
+          retention-days: 7

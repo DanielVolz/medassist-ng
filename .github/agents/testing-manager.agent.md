@@ -22,6 +22,9 @@ Own test planning, test changes, local execution, and CI triage for
 - Keep product repairs with the appropriate implementation owner; own the testing
   scope, evidence, and revalidation.
 - Use English and ASCII for test code, comments, and reports.
+- Follow `AGENTS.md`'s Local UI Sandbox procedure for exploratory UI verification. It uses anonymous demo data, not an authenticated test user; keep automated authenticated coverage in the existing isolated E2E setup.
+- At planning, identify whether medication-editor or affecting shared style/component changes make the editor gate applicable. After those changes and before handoff, run the canonical Docker functional/accessibility suite, then report its command/result or an explicit blocker; do not make the user run it. Do not impose it on unrelated frontend work.
+- For medication-editor regressions, follow `AGENTS.md`'s UI Regression Validation section and the matching phase skill. The tests protect responsive behavior, interactions, and scoped accessibility in both themes; pixel comparisons and screenshot baselines are not CI gates. Release-manager monitors actual GitHub CI. Docker setup, cache, shards, and artifact handling are documented in `docs/DEVELOPMENT.md`.
 
 ## Phase Router
 

@@ -239,6 +239,37 @@ test("release preflight rejects E2E CI without the core-b shard", () => {
   }
 });
 
+test("medication UI artifact upload allows only sanitized evidence formats", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/e2e.yml"), "utf8");
+  const uploadStep = workflow.match(
+    /      - name: Upload sanitized medication UI failure evidence\n((?:        .*\n)+)/
+  );
+
+  assert.ok(uploadStep, "expected the dedicated medication UI evidence upload step");
+  const uploadedPaths = uploadStep[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("frontend/test-results/"));
+
+  assert.deepEqual(uploadedPaths, [
+    "frontend/test-results/ui-e2e/**/*.png",
+    "frontend/test-results/ui-e2e/**/*.webm",
+    "frontend/test-results/ui-e2e/**/ui-safe-diagnostics*.json",
+    "frontend/test-results/ui-e2e/*/attachments/ui-safe-diagnostics-*.json",
+  ]);
+
+  const playwrightAttachmentPath = [
+    "frontend/test-results/ui-e2e",
+    "medication-ui-regression-prior-route-chromium-ui-retry1",
+    "attachments",
+    `ui-safe-diagnostics-${"a".repeat(40)}.json`,
+  ].join("/");
+  assert.match(
+    playwrightAttachmentPath,
+    /^frontend\/test-results\/ui-e2e\/[^/]+\/attachments\/ui-safe-diagnostics-[a-f0-9]{40}\.json$/
+  );
+});
+
 test("release preflight rejects frontend CI without the static check before build", () => {
   const fixtureRoot = copyFixture();
   try {
@@ -298,14 +329,71 @@ test("release preflight rejects a smoke gate without the data E2E lane", () => {
   try {
     const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      ", 'Playwright E2E data'",
+      "              'Playwright E2E data',\n",
       ""
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must require successful core-a, core-b, and data Playwright E2E lanes/
+      /\.github\/workflows\/container-smoke\.yml must require all four Playwright E2E lanes/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects a smoke gate without the medication UI E2E lane", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "              'Playwright E2E medication UI',\n",
+      ""
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/container-smoke\.yml must require all four Playwright E2E lanes/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects a smoke gate that treats missing E2E lanes as success", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "if (check?.conclusion !== 'success')",
+      "if (check?.conclusion === 'success')"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/container-smoke\.yml must require every E2E lane and honor legacy commit-status failures/
+    );
+  } finally {
+    rmSync(fixtureRoot, { recursive: true, force: true });
+  }
+});
+
+test("release preflight rejects a smoke gate that does not preserve non-E2E skip behavior", () => {
+  const fixtureRoot = copyFixture();
+  try {
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflow = readFileSync(workflowPath, "utf8").replace(
+      "if (!e2eRelevant)",
+      "if (e2eRelevant)"
+    );
+    writeFileSync(workflowPath, workflow);
+
+    expectPreflightFailure(
+      fixtureRoot,
+      /\.github\/workflows\/container-smoke\.yml must preserve E2E skip behavior for non-E2E-relevant changes/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

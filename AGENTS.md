@@ -125,13 +125,12 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 
 ## UI Regression Validation
 
-- Medication-editor visual and interaction checks run with `npm --prefix frontend run test:e2e:ui:docker`. This is separate from the exploratory sandbox and uses disposable authenticated data, not `.ui-dev/` or real `data/`.
+- Medication-editor functional and accessibility regressions run with `npm --prefix frontend run test:e2e:ui:docker`. This is separate from the exploratory sandbox and uses disposable authenticated data, not `.ui-dev/` or real `data/`.
 - At planning, decide whether the change edits the medication editor or a shared style/component that affects it. Only those scopes require this editor-specific gate; unrelated frontend changes do not.
-- For applicable UI work, inspect the affected screen in the Local UI Sandbox before editing and again after editing. Then have `testing-manager` run the canonical Docker comparison after the editor or shared style/component change and before handoff. Use `medassist-test-design` for coverage changes and `medassist-test-local-validation` for execution.
+- For applicable UI work, inspect the affected screen in the Local UI Sandbox before editing and again after editing. Then have `testing-manager` run the canonical Docker functional/accessibility suite after the editor or shared style/component change and before handoff. Use `medassist-test-design` for coverage changes and `medassist-test-local-validation` for execution.
 - Before handoff, report the gate as passed with its command/result, or explicitly blocked with the reason and next owner; do not silently omit it. The testing agent does not ask the user to run shell commands. `release-manager` monitors the actual GitHub CI result.
-- The tests compare desktop/mobile editor screenshots across light/dark themes and exercise layout, scroll/action reachability, keyboard behavior, save/validation errors, and scoped accessibility findings. This is editor regression coverage, not a full accessibility audit.
-- Baseline changes are never automatic: inspect and intentionally approve the rendered-image differences before using the documented update command. See `docs/DEVELOPMENT.md` for cache, shard, report, and baseline-update commands.
-- Keep screenshot generation and comparison in the pinned Linux AMD64 environment. Never update references merely to turn a failure green; inspect intended changes first. Ordinary E2E runs must remain separate from the Linux-only visual project.
+- The suite checks desktop/mobile editor layout and scroll/action reachability, keyboard behavior, save/validation errors, and scoped accessibility findings in light and dark themes. It is functional/accessibility regression coverage, not a full accessibility audit.
+- Pixel comparisons and screenshot baselines are not CI gates. Failure screenshots are diagnostic artifacts only; do not add screenshot-baseline assertions to this suite. See `docs/DEVELOPMENT.md` for Docker, shard, report, and artifact details.
 - Do not increase workers on shared-user/data fixtures without isolation. Diagnose failed tests and timeouts before treating an in-progress notification as a performance problem; retain measured single-shard defaults unless benchmarks justify a change.
 - Browser traces and linked HTML reports can contain test credentials. Follow the documented artifact policy; sanitized diagnostic counts do not make trace archives safe to share.
 

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test as base, expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { attachUiFailureDiagnostics } from "./ui-diagnostics";
 
 /** Storage state path for authenticated sessions */
 export const authFile = process.env.PLAYWRIGHT_AUTH_FILE || path.join(import.meta.dirname, "..", ".auth", "user.json");
@@ -158,13 +159,11 @@ export const uiTest = base.extend<object>({
 		await setupAuthMeMock(page);
 		await use(page);
 		if (testInfo.status !== testInfo.expectedStatus) {
-			const diagnosticPath = testInfo.outputPath("ui-safe-diagnostics.json");
-			await fs.promises.mkdir(path.dirname(diagnosticPath), { recursive: true });
-			await fs.promises.writeFile(diagnosticPath, JSON.stringify(diagnostics, null, 2));
-			await testInfo.attach("ui-safe-diagnostics", {
-				path: diagnosticPath,
-				contentType: "application/json",
-			});
+			try {
+				await attachUiFailureDiagnostics(page, testInfo, diagnostics);
+			} catch {
+				// Diagnostics must not replace the test's original failure.
+			}
 		}
 	},
 });

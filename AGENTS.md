@@ -74,6 +74,7 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 - If scope drift appears, stop adding to the current branch, keep only required changes, and move unrelated work to follow-up branches/PRs.
 - Use broad thematic branches/worktrees for materially different work areas, for example `intake`, `refill`, `notifications`, `auth`, `sharing`.
 - Reuse a theme branch for follow-ups in the same area instead of making one branch per micro-change.
+- After a release is merged and published, `release-manager` must leave the local workspace on an up-to-date `main` and delete the merged local release branch. Never leave the workspace on a stale `chore/release-*` branch.
 - If isolation is impractical because the workspace is already heavily dirty, keep edits tightly scoped and record why in `MEMORY.md`.
 
 ## Engineering Rules
@@ -85,6 +86,7 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 - Keep health checks and structured operational logging intact.
 - Keep lockfiles consistent; remove unused dependencies; prefer minimal maintained packages.
 - Update docs when behavior, setup, config, operations, or user workflows change.
+- When a change introduces a reusable development or validation workflow, update the relevant agent/skill guidance as well as user documentation. Keep policy in `AGENTS.md`, procedures in the owning skill, and detailed commands in `docs/DEVELOPMENT.md`; use references rather than copying the same instructions everywhere. Local `MEMORY.md` alone is not a shared handoff.
 - Prefer explicit readable code. No nested ternaries. Favor early returns over deep nesting.
 - Delete obsolete code when replacing a feature or fix path.
 - Always clean up dead code from older or failed approaches before handoff. Do not leave unused fallback paths, duplicate logic, stale listeners, unreachable branches, commented-out implementations, or tests for behavior that is no longer part of the final fix.
@@ -111,6 +113,27 @@ For explicit push, PR, merge, tag, or release requests, the normal agent's requi
 - Do not open a local browser, Chrome, or a browser automation session to inspect GitHub Actions, pull-request checks, workflow failures, logs, or artifacts.
 - Use `gh` or the GitHub API/MCP for CI triage, including check status, failed-job logs, artifacts, reruns, and PR metadata.
 - Open a browser only when validating a rendered product UI state that cannot be established from code, tests, or CI logs. A GitHub Actions URL is not a product UI validation target.
+
+## Local UI Sandbox
+
+- For general frontend layout, styling, and interaction work, use `npm run dev:ui` from the repository root and open `http://127.0.0.1:5176/dashboard`. See `docs/DEVELOPMENT.md` for the setup procedure.
+- This starts a loopback-only frontend (5176) and backend (5177), automatically seeds fictitious medication/person data on first startup, and uses the existing anonymous identity without registration or login.
+- Data lives in ignored `.ui-dev/data/`, persists across restarts, and must remain separate from real `data/` and repository `.env` settings. Do not reset demo edits or delete a launcher lock without checking its owning process.
+- Check whether the sandbox is already running before starting it. A busy port is not proof that the service is the sandbox; never seed or modify an unidentified instance.
+- Implementation, review, and testing agents should inspect the affected rendered state before changing UI and verify it afterward. Obtain browser evidence directly rather than routinely asking the user for screenshots.
+- The sandbox is not an authenticated test user or a replacement for authenticated verification. Account/profile, password, session, permissions, and SSO flows require the authenticated procedure below. Use the existing isolated E2E setup for automated authenticated tests.
+
+## UI Regression Validation
+
+- Medication-editor visual and interaction checks run with `npm --prefix frontend run test:e2e:ui:docker`. This is separate from the exploratory sandbox and uses disposable authenticated data, not `.ui-dev/` or real `data/`.
+- At planning, decide whether the change edits the medication editor or a shared style/component that affects it. Only those scopes require this editor-specific gate; unrelated frontend changes do not.
+- For applicable UI work, inspect the affected screen in the Local UI Sandbox before editing and again after editing. Then have `testing-manager` run the canonical Docker comparison after the editor or shared style/component change and before handoff. Use `medassist-test-design` for coverage changes and `medassist-test-local-validation` for execution.
+- Before handoff, report the gate as passed with its command/result, or explicitly blocked with the reason and next owner; do not silently omit it. The testing agent does not ask the user to run shell commands. `release-manager` monitors the actual GitHub CI result.
+- The tests compare desktop/mobile editor screenshots across light/dark themes and exercise layout, scroll/action reachability, keyboard behavior, save/validation errors, and scoped accessibility findings. This is editor regression coverage, not a full accessibility audit.
+- Baseline changes are never automatic: inspect and intentionally approve the rendered-image differences before using the documented update command. See `docs/DEVELOPMENT.md` for cache, shard, report, and baseline-update commands.
+- Keep screenshot generation and comparison in the pinned Linux AMD64 environment. Never update references merely to turn a failure green; inspect intended changes first. Ordinary E2E runs must remain separate from the Linux-only visual project.
+- Do not increase workers on shared-user/data fixtures without isolation. Diagnose failed tests and timeouts before treating an in-progress notification as a performance problem; retain measured single-shard defaults unless benchmarks justify a change.
+- Browser traces and linked HTML reports can contain test credentials. Follow the documented artifact policy; sanitized diagnostic counts do not make trace archives safe to share.
 
 ## Authenticated UI Verification
 
@@ -262,6 +285,7 @@ npm run lint
 npm run lint:fix
 npm run check
 npm run build
+npm run dev:ui
 ```
 
 ## Instruction Layout

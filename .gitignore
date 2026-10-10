@@ -41,6 +41,7 @@ coverage/
 *.db-wal
 *.db-shm
 data/
+.ui-dev/
 
 # ===================
 # Logs

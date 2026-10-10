@@ -60,9 +60,7 @@ async function attachFailureDiagnostics(
 ) {
 	try {
 		const diagnostics = await page.evaluate((targets) => {
-			const editor = document.querySelector(
-				'[data-ui-a11y-scope="true"], [role="dialog"], aside[data-open="true"]'
-			);
+			const editor = document.querySelector('[data-ui-a11y-scope="true"], [role="dialog"], aside[data-open="true"]');
 			const selectors = [
 				["heading", "h2"],
 				["form", "form"],
@@ -113,14 +111,14 @@ async function attachFailureDiagnostics(
 				};
 			};
 			const themeValue = document.documentElement.dataset.theme ?? document.body.dataset.theme ?? "";
-			const theme =
-				themeValue === "light" || themeValue === "dark"
-					? themeValue
-					: document.documentElement.classList.contains("dark")
-						? "dark"
-						: document.documentElement.classList.contains("light")
-							? "light"
-							: "unknown";
+			let theme = "unknown";
+			if (themeValue === "light" || themeValue === "dark") {
+				theme = themeValue;
+			} else if (document.documentElement.classList.contains("dark")) {
+				theme = "dark";
+			} else if (document.documentElement.classList.contains("light")) {
+				theme = "light";
+			}
 			return {
 				viewport: {
 					width: window.innerWidth,
@@ -130,9 +128,7 @@ async function attachFailureDiagnostics(
 					documentHeight: document.documentElement.clientHeight,
 				},
 				colorSchemePreference: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
-				reducedMotionPreference: matchMedia("(prefers-reduced-motion: reduce)").matches
-					? "reduce"
-					: "no-preference",
+				reducedMotionPreference: matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduce" : "no-preference",
 				theme,
 				editorElements: [
 					...(editor ? [describe(editor, "editor")] : []),
@@ -497,12 +493,8 @@ test.describe("Medication editor UI regressions", () => {
 				const findings = results.violations.flatMap((violation) =>
 					violation.nodes.map((node) => `${violation.id}|${node.target.join(" ")}`)
 				);
-				const reviewed = findings.filter((finding) =>
-					reviewedAxeFindingsByView[viewport.name].includes(finding)
-				);
-				const unreviewed = findings.filter(
-					(finding) => !reviewedAxeFindingsByView[viewport.name].includes(finding)
-				);
+				const reviewed = findings.filter((finding) => reviewedAxeFindingsByView[viewport.name].includes(finding));
+				const unreviewed = findings.filter((finding) => !reviewedAxeFindingsByView[viewport.name].includes(finding));
 				console.warn(`Reviewed existing axe findings (${viewport.name}): ${reviewed.join(", ")}`);
 				try {
 					expect(unreviewed).toEqual([]);

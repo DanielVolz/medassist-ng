@@ -228,7 +228,7 @@ jobs:
         if: needs.changes.outputs.e2e_relevant == 'true'
         run: npm ci --prefix backend && npm ci --prefix frontend
 
-      - name: Run dedicated medication UI regressions
+      - name: Run medication UI functional and accessibility checks
         if: needs.changes.outputs.e2e_relevant == 'true'
         run: npm run test:e2e:ci:ui --prefix frontend
         env:

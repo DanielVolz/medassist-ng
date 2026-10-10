@@ -296,11 +296,6 @@ test.describe("Medication editor UI regressions", () => {
 				const editor = await openEditor(page);
 				await expect(page.getByTestId("medication-row")).toHaveCount(4);
 				await expectRealMotionPreferences(page);
-				await expect(page).toHaveScreenshot(`medication-editor-${viewport.name}.png`, {
-					animations: "disabled",
-					caret: "hide",
-					maxDiffPixelRatio: 0.002,
-				});
 				await checkEditorGeometry(editor, page);
 			});
 

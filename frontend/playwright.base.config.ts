@@ -148,7 +148,6 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		forbidOnly: !!env.CI,
 		retries: env.CI ? 2 : 0,
 		workers,
-		updateSnapshots: env.PLAYWRIGHT_UI_TESTS === "true" ? "none" : undefined,
 		reporter: env.CI
 			? [["html", { outputFolder: env.PLAYWRIGHT_HTML_OUTPUT_DIR || "playwright-report" }], ["github"]]
 			: [["html", { outputFolder: env.PLAYWRIGHT_HTML_OUTPUT_DIR || "playwright-report" }], ["list"]],

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const image = "mcr.microsoft.com/playwright:v1.63.0-noble";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const usage =
-	"Usage: npm run test:e2e:ui:docker[:update] [-- --shards=N] [--update-snapshots] [--repeat-each=N] [--no-cache]";
+	"Usage: npm run test:e2e:ui:docker -- [--shards=N] [--repeat-each=N] [--no-cache]";
 
 export function dependencyCacheKey() {
 	const hash = createHash("sha256").update(`${image}:linux/amd64`);
@@ -22,36 +22,31 @@ export function dependencyCacheKey() {
 export function parseOptions(args, env = process.env) {
 	const shardArgs = args.filter((argument) => argument.startsWith("--shards="));
 	const repeatArgs = args.filter((argument) => argument.startsWith("--repeat-each="));
-	const updateCount = args.filter((argument) => argument === "--update-snapshots").length;
 	const envShards = env.PLAYWRIGHT_UI_SHARDS;
 	const explicitShardValue = shardArgs[0]?.slice("--shards=".length) ?? envShards;
 
 	if (
 		args.some(
 			(argument) =>
-				argument !== "--update-snapshots" &&
 				argument !== "--no-cache" &&
 				!/^--repeat-each=[1-9]\d*$/.test(argument) &&
 				!/^--shards=[1-9]\d*$/.test(argument)
 		) ||
 		shardArgs.length > 1 ||
 		repeatArgs.length > 1 ||
-		updateCount > 1 ||
 		(envShards !== undefined && !/^[1-9]\d*$/.test(envShards)) ||
 		(explicitShardValue !== undefined && !/^[1-9]\d*$/.test(explicitShardValue))
 	) {
 		throw new Error(usage);
 	}
 
-	const updateSnapshots = updateCount === 1;
 	const shards = explicitShardValue === undefined ? 1 : Number(explicitShardValue);
-	if (shards > 2 || (updateSnapshots && shards !== 1)) {
-		throw new Error(`${usage}\nShard count must be 1 or 2; snapshot updates require one shard.`);
+	if (shards > 2) {
+		throw new Error(`${usage}\nShard count must be 1 or 2.`);
 	}
 
 	return {
 		shards,
-		updateSnapshots,
 		repeatArgs,
 		cache: !args.includes("--no-cache"),
 	};
@@ -64,7 +59,6 @@ export function createShardPlan(shardIndex, shardCount, runId, options) {
 	const name = `medassist-ui-${runId}-${shardLabel}`;
 	const testArgs = [
 		`--shard=${shardIndex}/${shardCount}`,
-		...(options.updateSnapshots ? ["--update-snapshots"] : []),
 		...options.repeatArgs,
 	];
 	const cachePrefix = `medassist-ui-deps-${dependencyCacheKey()}-${shardIndex}`;

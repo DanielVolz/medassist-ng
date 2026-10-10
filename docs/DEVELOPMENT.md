@@ -104,30 +104,24 @@ For the focused authenticated medication-editor UI regressions, run:
 npm --prefix frontend run test:e2e:ui:docker
 ```
 
-This gate is required after a medication-editor change or a shared style/component
-change that affects the editor, and must pass or be reported as blocked before
-handoff. Plan for it before editing; implementation agents inspect the actual
-screen in the anonymous Local UI Sandbox before and after the change, while
-`testing-manager` runs this authenticated Docker comparison. Unrelated frontend
-changes do not require the editor-specific gate, and agents should not ask users
-to run its shell command.
+This functional/accessibility gate is required after a medication-editor change
+or a shared style/component change that affects the editor, and must pass or be
+reported as blocked before handoff. It uses disposable authenticated data and
+fictional sample records; it does not touch `data/`, `.ui-dev/`, or the normal
+E2E auth profile. The suite checks desktop/mobile layout and scroll/action
+reachability, keyboard behavior, save/validation errors, and scoped accessibility
+findings in light and dark themes. Pixel comparisons and screenshot baselines
+are not CI gates. Failure screenshots and videos are diagnostic artifacts only.
+Unrelated frontend changes do not require this editor-specific gate.
 
-It uses the pinned Playwright `1.63.0` Linux AMD64 container used by CI, with
-disposable auth/database state and fictional sample data; it does not touch `data/`, `.ui-dev/`, or the normal E2E auth profile. It tests desktop/mobile in
-light/dark with real theme and motion preferences. It compares editor screenshots
-and checks layout/scroll reachability, keyboard behavior, validation and failed
-saves, plus scoped, reviewed accessibility findings. Each local run uses a new
-result directory under ignored `frontend/test-results/`. The default is one
-container. Use `--shards=2` to opt into two separate containers, each running
-one Playwright shard (`PLAYWRIGHT_UI_SHARDS=2` is also available for scripted
-runs); each container has its own
-temporary filesystem, auth state, database, shared build output, test results,
-and HTML report, avoiding shared-account rate limits or result-file races.
-Shard count is bounded to one or two. Both containers use the same pinned Linux
-AMD64 image and keep Playwright workers at one. Snapshot updates automatically
-use one shard; passing `--shards=2` with
-`--update-snapshots` is rejected to prevent concurrent baseline writes.
-Preserve repeat runs with `--repeat-each=N`, for example:
+The runner uses the pinned Playwright `1.63.0` Linux AMD64 container used by CI.
+Each run uses a new result directory under ignored `frontend/test-results/`.
+The default is one container. Use `--shards=2` to opt into two separate
+containers, each running one Playwright shard (`PLAYWRIGHT_UI_SHARDS=2` is also
+available for scripted runs); each container has its own temporary filesystem,
+auth state, database, shared build output, test results, and HTML report.
+Shard count is bounded to one or two, and both containers keep Playwright
+workers at one. Preserve repeat runs with `--repeat-each=N`, for example:
 
 ```bash
 npm --prefix frontend run test:e2e:ui:docker -- --shards=1 --repeat-each=2
@@ -141,13 +135,6 @@ Installation is locked per shard and marked complete only after all packages
 install successfully. No auth state, database, or test results are cached.
 Use `--no-cache` to install into disposable filesystems instead.
 
-On this ARM Mac with eight Docker CPUs, two emulated AMD64 shards were slower
-than one (263 versus 176 seconds for the same suite), so parallelism is opt-in.
-A subsequent cold/warm cache comparison passed all 14 tests in 186/164 seconds
-respectively. These measurements include startup and are not a guaranteed
-speedup on other machines. The canonical image and screenshot references stay
-unchanged.
-
 The generated HTML reports are stored in ignored
 `frontend/playwright-report/ui-e2e-*` directories. Trace archives
 record network activity and can contain cookies, authorization headers,
@@ -156,31 +143,25 @@ traces. Treat both as sensitive local artifacts; do not share or upload them.
 Authentication state is kept under ignored
 `frontend/e2e/.auth/` for ordinary local runs (the Docker runner uses `/tmp`).
 
-The dedicated CI job uploads only PNG images, WebM failure video, and a
-diagnostic containing event counts and HTTP status codes. It does not upload
-trace archives, HTML reports, auth state, or database files. CI uses disposable
-test credentials and fictional records. `chromium-ui` is enabled only by the
-dedicated scripts via `PLAYWRIGHT_UI_TESTS=true`; ordinary E2E, headed, and
-cross-browser runs exclude the UI spec. Snapshot updates are disabled by
-default for UI runs; baselines stay under `frontend/e2e/*-snapshots/`.
-The UI job runs in the test workflow's reusable Playwright E2E path: relevant
-frontend/backend changes run it after the existing backend-test and
-frontend-build gates succeed. Its failure fails the reusable Playwright E2E
-result and legacy `Playwright E2E` commit status. Frontend specs, fixtures,
-Playwright configuration, UI runner, and frontend lockfile changes are included
-by the frontend path filter. The release manager monitors the GitHub check;
-developers do not need to run shell commands to monitor CI.
+The dedicated CI job uploads failure PNG images, WebM failure video, and a
+diagnostic containing event counts and HTTP status codes. Those artifacts are
+for debugging functional test failures and are not compared to reference images.
+It does not upload trace archives, HTML reports, auth state, or database files.
+CI uses disposable test credentials and fictional records. The medication UI
+suite runs only through its dedicated `chromium-ui` project; ordinary E2E,
+headed, and cross-browser runs exclude the UI spec. The UI job runs in the test
+workflow's reusable Playwright E2E path: relevant frontend/backend changes run
+it after the existing backend-test and frontend-build gates succeed. Its
+failure fails the reusable Playwright E2E result and legacy `Playwright E2E`
+commit status. Frontend specs, fixtures, Playwright configuration, UI runner,
+and frontend lockfile changes are included by the frontend path filter. The
+release manager monitors the GitHub check; developers do not need to run shell
+commands to monitor CI.
 
 The scoped axe audit checks the editor subtree, including its inputs, buttons,
 and tabs; it records exact existing rule/target findings, not full compliance.
 Only reviewed exact findings are allowed; new ones fail. UI repairs remain
 with the implementation owner.
-
-Refresh baselines only after inspecting rendered images and approving changes:
-
-```bash
-npm --prefix frontend run test:e2e:ui:docker:update
-```
 
 ## Browser MCP Access
 

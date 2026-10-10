@@ -35,16 +35,19 @@ product implementation beyond identifying the repair owner.
   fixture when real light/dark themes and motion preferences matter. Preserve the
   ordinary fixture's existing behavior.
 - Cover both desktop and mobile edit paths with deterministic fictional records;
-  use geometry, scroll/action reachability, keyboard, and error-state assertions
-  alongside the four visual references.
+  use geometry, scroll/action reachability, keyboard, save/validation, and
+  scoped accessibility assertions. Keep functional and accessibility behavior
+  covered across light and dark themes where applicable.
+- Pixel comparisons and screenshot baselines are not CI gates. Do not add
+  `toHaveScreenshot` assertions or baseline files to this suite. Failure-only
+  screenshots are diagnostics, not pass/fail evidence.
 - The scoped axe audit permits exact reviewed existing rule/target findings,
   not blanket rule exclusions or a claim of full accessibility compliance.
   Report existing defects separately; do not silently approve new findings.
 - Shared auth and destructive seed helpers are not worker-safe. Parallel coverage
   requires isolated accounts/data or separate containers, not just more workers.
-- Baseline changes require rendered-image review and the explicit Docker update
-  command documented in `docs/DEVELOPMENT.md`. Then hand execution to
-  `medassist-test-local-validation` and compare without update mode.
+- Hand execution to `medassist-test-local-validation` for the canonical Docker
+  functional/accessibility suite documented in `docs/DEVELOPMENT.md`.
 
 ## Output
 

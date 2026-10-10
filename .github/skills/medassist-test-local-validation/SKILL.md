@@ -29,9 +29,9 @@ Do not design or change tests, and do not inspect or triage GitHub CI failures.
 - Follow `AGENTS.md`'s UI Regression Validation rules for applicability and
   timing. For an applicable change, run this through `testing-manager` before
   handoff; report the exact command/result or an explicit blocker.
-- Run `npm --prefix frontend run test:e2e:ui:docker` for canonical visual
-  comparison; the runner pins Playwright 1.63.0 and Linux AMD64. Do not compare
-  native macOS images with these Linux references.
+- Run `npm --prefix frontend run test:e2e:ui:docker` for the canonical functional
+  and accessibility suite; the runner pins Playwright 1.63.0 and Linux AMD64.
+  Pixel comparisons and screenshot baselines are not CI gates.
 - The default is one shard/worker. `--shards=2` isolates containers, auth,
   databases, shared build output, results, and reports; it is opt-in because
   measured ARM-host emulation was slower with two shards. Do not equate more
@@ -41,12 +41,10 @@ Do not design or change tests, and do not inspect or triage GitHub CI failures.
   Auth state, databases, and results must never be added to the cache.
 - Use `--repeat-each=N` for stability checks. Measure comparable wall/test times
   before claiming improvement; a 60-second in-progress message is not a hang.
-- Missing visual references must fail without writing. Do not invoke the
-  separate `test:e2e:ui:docker:update` command without intentional baseline
-  review under `medassist-test-design`.
 - Traces and linked HTML reports are sensitive local evidence; the UI CI job
-  uploads only fictional-data images/video and reduced diagnostic counts/status
-  codes. See `docs/DEVELOPMENT.md` for locations and commands.
+  uploads failure screenshots/video and reduced diagnostic counts/status codes
+  for fictional data only. These artifacts are diagnostic evidence, not image
+  comparison gates. See `docs/DEVELOPMENT.md` for locations and commands.
 
 ## Representative Commands
 

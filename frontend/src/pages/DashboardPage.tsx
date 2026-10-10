@@ -1137,7 +1137,6 @@ export function DashboardPage() {
 		{
 			key: "status",
 			header: t("table.status"),
-			width: "7.5rem",
 			render: (row) => {
 				const med = getMedByName(row.name);
 				const rawStatus = getStockStatus(row.daysLeft, row.medsLeft, stockThresholds, med?.packageType);
@@ -1380,6 +1379,7 @@ export function DashboardPage() {
 														const isLowStock = !isEmpty && status?.className === "warning";
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
+														else if (status?.className === "danger") rowClasses.push("med-critical");
 														else if (isLowStock) rowClasses.push("med-low");
 														if (med?.id != null && notificationTarget?.medId === String(med.id)) {
 															rowClasses.push("notification-focus-target-row");
@@ -1698,6 +1698,7 @@ export function DashboardPage() {
 														const isLowStock = !isEmpty && visibleStatus?.className === "warning";
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
+														else if (visibleStatus?.className === "danger") rowClasses.push("med-critical");
 														else if (isLowStock) rowClasses.push("med-low");
 														if (med?.id != null && notificationTarget?.medId === String(med.id)) {
 															rowClasses.push("notification-focus-target-row");
@@ -1975,6 +1976,7 @@ export function DashboardPage() {
 														const isLowStock = !isEmpty && visibleStatus?.className === "warning";
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
+														else if (visibleStatus?.className === "danger") rowClasses.push("med-critical");
 														else if (isLowStock) rowClasses.push("med-low");
 														if (med?.id != null && notificationTarget?.medId === String(med.id)) {
 															rowClasses.push("notification-focus-target-row");

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useTranslation } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockSharedScheduleRead, renderSharedSchedule } from "../helpers/shared-schedule";
@@ -372,7 +372,7 @@ describe("SharedSchedule", () => {
 		expect(screen.getByText("share.publicAccessHelp")).toBeInTheDocument();
 	});
 
-	it("shows low and out-of-stock markers on shared schedule rows", async () => {
+	it("maps critical, low, normal, and empty stock on shared schedule rows", async () => {
 		const referenceNow = new Date();
 		referenceNow.setHours(12, 0, 0, 0);
 		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
@@ -386,6 +386,16 @@ describe("SharedSchedule", () => {
 				...sharedData.medications[0],
 				id: 2,
 				name: "Empty Shared Med",
+			},
+			{
+				...sharedData.medications[0],
+				id: 3,
+				name: "Critical Shared Med",
+			},
+			{
+				...sharedData.medications[0],
+				id: 4,
+				name: "Normal Shared Med",
 			},
 		];
 		const sharedDataWithStock = {
@@ -408,6 +418,16 @@ describe("SharedSchedule", () => {
 					currentStock: 0,
 					daysLeft: 0,
 				},
+				{
+					name: "Critical Shared Med",
+					currentStock: 5,
+					daysLeft: 3,
+				},
+				{
+					name: "Normal Shared Med",
+					currentStock: 20,
+					daysLeft: 45,
+				},
 			],
 		};
 
@@ -421,6 +441,13 @@ describe("SharedSchedule", () => {
 		});
 		expect(document.querySelector(".time-row.med-low")).toBeInTheDocument();
 		expect(document.querySelector(".time-row.med-empty")).toBeInTheDocument();
+		const criticalRow = screen.getByText("Critical Shared Med").closest(".time-row");
+		expect(criticalRow).toHaveClass("med-critical");
+		expect(criticalRow).not.toHaveClass("med-empty");
+		expect(criticalRow?.querySelector(".dose-item")).not.toHaveClass("med-empty");
+		expect(within(criticalRow as HTMLElement).getByRole("button", { name: "dose.take" })).toBeEnabled();
+		expect(within(criticalRow as HTMLElement).getByRole("button", { name: "dose.skip" })).toBeEnabled();
+		expect(screen.getByText("Normal Shared Med").closest(".time-row")).not.toHaveClass("med-critical");
 		expect(document.querySelector(".dose-item.med-low")).toBeInTheDocument();
 		expect(document.querySelector(".dose-item.med-empty")).toBeInTheDocument();
 	});

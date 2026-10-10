@@ -1589,6 +1589,61 @@ describe("DashboardPage additional branches", () => {
 		fireEvent.click(undoButton);
 		expect(undoDoseTaken).toHaveBeenCalled();
 	});
+
+	it("maps critical remaining stock to a critical rail without treating it as empty", () => {
+		const stockMeds = [
+			{ ...mockMeds[0], id: 10, name: "Critical Med" },
+			{ ...mockMeds[0], id: 11, name: "Low Med" },
+			{ ...mockMeds[0], id: 12, name: "Empty Med" },
+			{ ...mockMeds[0], id: 13, name: "Normal Med" },
+		];
+		const stockByName = {
+			"Critical Med": { name: "Critical Med", medsLeft: 5, daysLeft: 3 },
+			"Low Med": { name: "Low Med", medsLeft: 5, daysLeft: 10 },
+			"Empty Med": { name: "Empty Med", medsLeft: 0, daysLeft: 0 },
+			"Normal Med": { name: "Normal Med", medsLeft: 20, daysLeft: 45 },
+		};
+		const when = Date.now() - 60_000;
+		const todayDay = {
+			dateStr: "Today",
+			date: new Date(),
+			isPast: false,
+			meds: stockMeds.map((med) => ({
+				medName: med.name,
+				total: 1,
+				doses: [{ id: `${med.id}-0-${when}`, timeStr: "09:00", when, usage: 1, takenBy: ["John"] }],
+				lastWhen: when,
+			})),
+		};
+		mockContextValue = createMockAppContext({
+			meds: stockMeds,
+			todayDay,
+			coverageByMed: stockByName,
+			stockThresholds: {
+				lowStockDays: 30,
+				normalStockDays: 60,
+				highStockDays: 90,
+				criticalStockDays: 7,
+				expiryWarningDays: 30,
+			},
+		});
+
+		render(
+			<MemoryRouter>
+				<DashboardPage />
+			</MemoryRouter>
+		);
+
+		const criticalRow = screen.getByText("Critical Med").closest(".time-row");
+		expect(criticalRow).toHaveClass("med-critical");
+		expect(criticalRow).not.toHaveClass("med-empty");
+		expect(criticalRow?.querySelector(".dose-item")).not.toHaveClass("med-empty");
+		expect(within(criticalRow as HTMLElement).getByRole("button", { name: "dose.take" })).toBeEnabled();
+
+		expect(screen.getByText("Low Med").closest(".time-row")).toHaveClass("med-low");
+		expect(screen.getByText("Empty Med").closest(".time-row")).toHaveClass("med-empty");
+		expect(screen.getByText("Normal Med").closest(".time-row")).not.toHaveClass("med-critical");
+	});
 });
 
 describe("DashboardPage with expanded past days", () => {

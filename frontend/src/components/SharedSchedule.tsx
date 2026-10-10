@@ -1414,6 +1414,7 @@ export function SharedSchedule() {
 														const isLowStock = stockStatus?.className === "warning";
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
+														else if (stockStatus?.className === "danger") rowClasses.push("med-critical");
 														else if (isLowStock) rowClasses.push("med-low");
 
 														return (
@@ -1625,6 +1626,7 @@ export function SharedSchedule() {
 														const isLowStock = stockStatus?.className === "warning";
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
+														else if (stockStatus?.className === "danger") rowClasses.push("med-critical");
 														else if (isLowStock) rowClasses.push("med-low");
 														return (
 															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
@@ -1820,6 +1822,7 @@ export function SharedSchedule() {
 														const isLowStock = stockStatus?.className === "warning";
 														const rowClasses = ["time-row"];
 														if (isEmpty) rowClasses.push("med-empty");
+														else if (stockStatus?.className === "danger") rowClasses.push("med-critical");
 														else if (isLowStock) rowClasses.push("med-low");
 														return (
 															<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>

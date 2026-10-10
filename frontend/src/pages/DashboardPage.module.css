@@ -114,3 +114,29 @@
 .overviewTakenByReminderIcon {
 	flex: 0 0 auto;
 }
+
+@media (min-width: 769px) {
+	.overviewSection :global(th),
+	.overviewSection :global(td) {
+		padding-inline: 0.5rem;
+	}
+
+	.overviewSection :global(th) {
+		white-space: normal;
+	}
+
+	.overviewSection :global(td[data-column-key="name"]) {
+		min-width: 12rem;
+	}
+
+	.overviewSection :global(td[data-column-key="stockDetails"]),
+	.overviewSection :global(td[data-column-key="dailyConsumption"]) {
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	.overviewSection :global(.date-pair-label),
+	.overviewSection :global(td[data-column-key="datePair"]) :global(.date-pair-value) {
+		white-space: normal;
+	}
+}

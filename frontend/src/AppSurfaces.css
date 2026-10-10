@@ -1642,6 +1642,7 @@ button.has-validation-error {
 	padding-bottom: 0;
 }
 
+.time-row.med-critical,
 .time-row.med-empty {
 	margin-left: calc(-1 * var(--time-row-status-rail-width));
 	margin-top: -1px;
@@ -1663,6 +1664,7 @@ button.has-validation-error {
 }
 
 [data-theme="light"] .time-row.med-empty,
+[data-theme="light"] .time-row.med-critical,
 [data-theme="light"] .time-row.med-low {
 	border-top-color: rgba(0, 0, 0, 0.06);
 }

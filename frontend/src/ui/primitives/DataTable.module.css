@@ -154,6 +154,11 @@
 		text-transform: uppercase;
 	}
 
+	.bodyCell[data-column-key="stockDetails"] {
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
 	.bodyCell:not([data-label]) {
 		display: block;
 	}

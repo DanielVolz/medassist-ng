@@ -566,6 +566,7 @@ export function SchedulePage() {
 											const isLowStock = !isEmpty && visibleStatus?.className === "warning";
 											const rowClasses = ["time-row"];
 											if (isEmpty) rowClasses.push("med-empty");
+											else if (visibleStatus?.className === "danger") rowClasses.push("med-critical");
 											else if (isLowStock) rowClasses.push("med-low");
 											return (
 												<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>
@@ -769,6 +770,7 @@ export function SchedulePage() {
 									const isLowStock = !isEmpty && visibleStatus?.className === "warning";
 									const rowClasses = ["time-row"];
 									if (isEmpty) rowClasses.push("med-empty");
+									else if (visibleStatus?.className === "danger") rowClasses.push("med-critical");
 									else if (isLowStock) rowClasses.push("med-low");
 									return (
 										<div key={`${day.dateStr}-${item.medName}`} className={rowClasses.join(" ")}>

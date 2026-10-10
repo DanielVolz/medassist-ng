@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import type { TestInfo } from "@playwright/test";
 import {
 	authFile,
 	createMedicationViaAPI,
@@ -27,6 +28,167 @@ const reviewedAxeFindingsByView: Record<string, string[]> = {
 	],
 	mobile: ['label|input[accept="image/*"]'],
 };
+type AxeDiagnosticTarget = {
+	selector: string;
+	safeTarget: string;
+	contrast: Array<Record<string, string | number>>;
+};
+
+function safeAxeTarget(selector: string) {
+	return selector
+		.replace(/\[(?:value|placeholder|aria-label|name|title)\s*=\s*(?:"[^"]*"|'[^']*'|[^\]]*)\]/gi, "")
+		.replace(/\s+/g, " ")
+		.slice(0, 240);
+}
+
+function axeContrastData(check: { data?: unknown }) {
+	if (!check.data || typeof check.data !== "object") return {};
+	const data = check.data as Record<string, unknown>;
+	const contrast: Record<string, string | number> = {};
+	for (const key of ["fgColor", "bgColor", "contrastRatio", "expectedContrastRatio"]) {
+		const value = data[key];
+		if (typeof value === "string" || typeof value === "number") contrast[key] = value;
+	}
+	return contrast;
+}
+
+async function attachFailureDiagnostics(
+	page: Parameters<typeof navigateTo>[0],
+	testInfo: TestInfo,
+	reason: string,
+	axeTargets: AxeDiagnosticTarget[] = []
+) {
+	try {
+		const diagnostics = await page.evaluate((targets) => {
+			const editor = document.querySelector(
+				'[data-ui-a11y-scope="true"], [role="dialog"], aside[data-open="true"]'
+			);
+			const selectors = [
+				["heading", "h2"],
+				["form", "form"],
+				["labels", "label"],
+				["inputs", "input"],
+				["tabs", '[role="tab"]'],
+				["actions", "button"],
+			] as const;
+			const describe = (element: Element, selector: string) => {
+				const style = getComputedStyle(element);
+				const rect = element.getBoundingClientRect();
+				const textBoxes: Array<{ bottom: number; left: number; right: number; top: number }> = [];
+				const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+				while (walker.nextNode()) {
+					const range = document.createRange();
+					range.selectNodeContents(walker.currentNode);
+					for (const textRect of Array.from(range.getClientRects())) {
+						if (textRect.width > 0 && textRect.height > 0) {
+							textBoxes.push({
+								bottom: textRect.bottom,
+								left: textRect.left,
+								right: textRect.right,
+								top: textRect.top,
+							});
+						}
+					}
+				}
+				return {
+					selector,
+					tag: element.tagName.toLowerCase(),
+					box: {
+						bottom: rect.bottom,
+						height: rect.height,
+						left: rect.left,
+						right: rect.right,
+						top: rect.top,
+						width: rect.width,
+					},
+					font: {
+						family: style.fontFamily,
+						size: style.fontSize,
+						lineHeight: style.lineHeight,
+					},
+					color: style.color,
+					backgroundColor: style.backgroundColor,
+					display: style.display,
+					textBoxes,
+				};
+			};
+			const themeValue = document.documentElement.dataset.theme ?? document.body.dataset.theme ?? "";
+			const theme =
+				themeValue === "light" || themeValue === "dark"
+					? themeValue
+					: document.documentElement.classList.contains("dark")
+						? "dark"
+						: document.documentElement.classList.contains("light")
+							? "light"
+							: "unknown";
+			return {
+				viewport: {
+					width: window.innerWidth,
+					height: window.innerHeight,
+					deviceScaleFactor: window.devicePixelRatio,
+					documentWidth: document.documentElement.clientWidth,
+					documentHeight: document.documentElement.clientHeight,
+				},
+				colorSchemePreference: matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+				reducedMotionPreference: matchMedia("(prefers-reduced-motion: reduce)").matches
+					? "reduce"
+					: "no-preference",
+				theme,
+				editorElements: [
+					...(editor ? [describe(editor, "editor")] : []),
+					...selectors.flatMap(([name, selector]) =>
+						Array.from(editor?.querySelectorAll(selector) ?? [])
+							.slice(0, name === "actions" || name === "tabs" ? 8 : 4)
+							.map((element) => describe(element, name))
+					),
+				],
+				axeTargets: targets.slice(0, 24).map((target) => {
+					let element: Element | null = null;
+					try {
+						element = document.querySelector(target.selector);
+					} catch {
+						// Invalid Axe selectors are reported without DOM-derived details.
+					}
+					return {
+						target: target.safeTarget,
+						style: element ? describe(element, target.safeTarget) : null,
+						contrast: target.contrast,
+					};
+				}),
+			};
+		}, axeTargets);
+		const browser = page.context().browser();
+		await testInfo.attach("ui-failure-diagnostics.json", {
+			body: JSON.stringify(
+				{
+					reason,
+					browser: {
+						name: browser?.browserType().name() ?? "unknown",
+						version: browser?.version() ?? "unknown",
+						project: testInfo.project.name,
+						playwrightViewport: page.viewportSize(),
+					},
+					...diagnostics,
+				},
+				null,
+				2
+			),
+			contentType: "application/json",
+		});
+	} catch {
+		// Diagnostics must not replace the original visual or accessibility failure.
+	}
+
+	try {
+		const screenshot = await page.screenshot({ animations: "disabled", caret: "hide" });
+		await testInfo.attach("ui-failure-rendered-page.png", {
+			body: screenshot,
+			contentType: "image/png",
+		});
+	} catch {
+		// Playwright's original failure screenshot remains available if this capture fails.
+	}
+}
 async function seedMedications() {
 	const medication = await createMedicationViaAPI({
 		name: longName,
@@ -221,17 +383,22 @@ test.describe("Medication editor UI regressions", () => {
 		test.describe(viewport.name, () => {
 			test.use({ viewport: viewport.size, isMobile: viewport.mobile, hasTouch: viewport.mobile });
 
-			test("long names and eight scheduled intakes remain usable", async ({ page }) => {
+			test("long names and eight scheduled intakes remain usable", async ({ page }, testInfo) => {
 				await setRealTheme(page, viewport.theme);
 				await seedMedications();
 				const editor = await openEditor(page);
 				await expect(page.getByTestId("medication-row")).toHaveCount(4);
 				await expectRealMotionPreferences(page);
-				await expect(page).toHaveScreenshot(`medication-editor-${viewport.name}.png`, {
-					animations: "disabled",
-					caret: "hide",
-					maxDiffPixelRatio: 0.002,
-				});
+				try {
+					await expect(page).toHaveScreenshot(`medication-editor-${viewport.name}.png`, {
+						animations: "disabled",
+						caret: "hide",
+						maxDiffPixelRatio: 0.002,
+					});
+				} catch (error) {
+					await attachFailureDiagnostics(page, testInfo, "screenshot assertion");
+					throw error;
+				}
 				await checkEditorGeometry(editor, page);
 			});
 
@@ -318,7 +485,7 @@ test.describe("Medication editor UI regressions", () => {
 		test.describe(`${viewport.name} axe input audit`, () => {
 			test.use({ viewport: viewport.size, isMobile: viewport.mobile, hasTouch: viewport.mobile });
 
-			test("reports reviewed findings and no new WCAG 2.1/2.2 editor violations", async ({ page }) => {
+			test("reports reviewed findings and no new WCAG 2.1/2.2 editor violations", async ({ page }, testInfo) => {
 				await setRealTheme(page, "light");
 				await seedMedications();
 				const editor = await openEditor(page);
@@ -330,12 +497,31 @@ test.describe("Medication editor UI regressions", () => {
 				const findings = results.violations.flatMap((violation) =>
 					violation.nodes.map((node) => `${violation.id}|${node.target.join(" ")}`)
 				);
-				const reviewed = findings
-					.filter((finding) => reviewedAxeFindingsByView[viewport.name].includes(finding))
-					.sort();
-				const unreviewed = findings.filter((finding) => !reviewedAxeFindingsByView[viewport.name].includes(finding));
+				const reviewed = findings.filter((finding) =>
+					reviewedAxeFindingsByView[viewport.name].includes(finding)
+				);
+				const unreviewed = findings.filter(
+					(finding) => !reviewedAxeFindingsByView[viewport.name].includes(finding)
+				);
 				console.warn(`Reviewed existing axe findings (${viewport.name}): ${reviewed.join(", ")}`);
-				expect(unreviewed).toEqual([]);
+				try {
+					expect(unreviewed).toEqual([]);
+				} catch (error) {
+					const axeTargets = results.violations.flatMap((violation) =>
+						violation.nodes.flatMap((node) => {
+							const contrast = [...node.any, ...node.all, ...node.none]
+								.map(axeContrastData)
+								.filter((data) => Object.keys(data).length > 0);
+							return node.target.map((selector) => ({
+								selector,
+								safeTarget: safeAxeTarget(selector),
+								contrast,
+							}));
+						})
+					);
+					await attachFailureDiagnostics(page, testInfo, "axe assertion", axeTargets);
+					throw error;
+				}
 			});
 		});
 	}

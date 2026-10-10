@@ -256,7 +256,6 @@ test("medication UI artifact upload allows only sanitized evidence formats", () 
     "frontend/test-results/ui-e2e/**/*.webm",
     "frontend/test-results/ui-e2e/**/ui-safe-diagnostics*.json",
     "frontend/test-results/ui-e2e/*/attachments/ui-safe-diagnostics-*.json",
-    "frontend/test-results/ui-e2e/**/ui-failure-diagnostics*.json",
   ]);
 
   const playwrightAttachmentPath = [

@@ -59,7 +59,95 @@ Local Playwright runs start their own backend and frontend servers instead of re
 
 This keeps `npm --prefix frontend run test:e2e` from colliding with the Docker dev stack on `3000`/`5173` or mutating the normal local SQLite data. Override these defaults with `PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, `PLAYWRIGHT_FRONTEND_PORT`, or `PLAYWRIGHT_DATA_DIR` when an E2E run must target a specific external server.
 
+The Chromium core project retains a trace on failure even with zero retries.
+Traces can contain disposable test credentials and request data; treat them as
+sensitive debugging artifacts, not sanitized logs.
+
 `npm --prefix frontend run test:e2e:all` owns its server URLs and runs Chromium core and data tests together, then runs Firefox and WebKit in separate Playwright processes. Each browser batch receives fresh backend data, an isolated authentication-state file, and temporary result output, so sensitive authentication route limits do not accumulate across browsers and existing report/results directories are not cleared. Successful runs remove their temporary workspace; failed runs print and retain its path for diagnostics. Use the direct Playwright CLI when targeting an externally managed server.
+
+For the focused authenticated medication-editor UI regressions, run:
+
+```bash
+npm --prefix frontend run test:e2e:ui:docker
+```
+
+This gate is required after a medication-editor change or a shared style/component
+change that affects the editor, and must pass or be reported as blocked before
+handoff. Plan for it before editing; implementation agents inspect the actual
+screen in the anonymous Local UI Sandbox before and after the change, while
+`testing-manager` runs this authenticated Docker comparison. Unrelated frontend
+changes do not require the editor-specific gate, and agents should not ask users
+to run its shell command.
+
+It uses the pinned Playwright `1.63.0` Linux AMD64 container used by CI, with
+disposable auth/database state and fictional sample data; it does not touch `data/`, `.ui-dev/`, or the normal E2E auth profile. It tests desktop/mobile in
+light/dark with real theme and motion preferences. It compares editor screenshots
+and checks layout/scroll reachability, keyboard behavior, validation and failed
+saves, plus scoped, reviewed accessibility findings. Each local run uses a new
+result directory under ignored `frontend/test-results/`. The default is one
+container. Use `--shards=2` to opt into two separate containers, each running
+one Playwright shard (`PLAYWRIGHT_UI_SHARDS=2` is also available for scripted
+runs); each container has its own
+temporary filesystem, auth state, database, shared build output, test results,
+and HTML report, avoiding shared-account rate limits or result-file races.
+Shard count is bounded to one or two. Both containers use the same pinned Linux
+AMD64 image and keep Playwright workers at one. Snapshot updates automatically
+use one shard; passing `--shards=2` with
+`--update-snapshots` is rejected to prevent concurrent baseline writes.
+Preserve repeat runs with `--repeat-each=N`, for example:
+
+```bash
+npm --prefix frontend run test:e2e:ui:docker -- --shards=1 --repeat-each=2
+npm --prefix frontend run test:e2e:ui:docker -- --shards=2 --repeat-each=2
+```
+
+Dependencies are reused in local Docker volumes named `medassist-ui-deps-*`.
+The cache key includes all three package manifests and lockfiles, the pinned
+image, and target architecture; changed dependencies trigger fresh installation.
+Installation is locked per shard and marked complete only after all packages
+install successfully. No auth state, database, or test results are cached.
+Use `--no-cache` to install into disposable filesystems instead.
+
+On this ARM Mac with eight Docker CPUs, two emulated AMD64 shards were slower
+than one (263 versus 176 seconds for the same suite), so parallelism is opt-in.
+A subsequent cold/warm cache comparison passed all 14 tests in 186/164 seconds
+respectively. These measurements include startup and are not a guaranteed
+speedup on other machines. The canonical image and screenshot references stay
+unchanged.
+
+The generated HTML reports are stored in ignored
+`frontend/playwright-report/ui-e2e-*` directories. Trace archives
+record network activity and can contain cookies, authorization headers,
+request/response bodies, and URL queries; the HTML report may link to those
+traces. Treat both as sensitive local artifacts; do not share or upload them.
+Authentication state is kept under ignored
+`frontend/e2e/.auth/` for ordinary local runs (the Docker runner uses `/tmp`).
+
+The dedicated CI job uploads only PNG images, WebM failure video, and a
+diagnostic containing event counts and HTTP status codes. It does not upload
+trace archives, HTML reports, auth state, or database files. CI uses disposable
+test credentials and fictional records. `chromium-ui` is enabled only by the
+dedicated scripts via `PLAYWRIGHT_UI_TESTS=true`; ordinary E2E, headed, and
+cross-browser runs exclude the UI spec. Snapshot updates are disabled by
+default for UI runs; baselines stay under `frontend/e2e/*-snapshots/`.
+The UI job runs in the test workflow's reusable Playwright E2E path: relevant
+frontend/backend changes run it after the existing backend-test and
+frontend-build gates succeed. Its failure fails the reusable Playwright E2E
+result and legacy `Playwright E2E` commit status. Frontend specs, fixtures,
+Playwright configuration, UI runner, and frontend lockfile changes are included
+by the frontend path filter. The release manager monitors the GitHub check;
+developers do not need to run shell commands to monitor CI.
+
+The scoped axe audit checks the editor subtree, including its inputs, buttons,
+and tabs; it records exact existing rule/target findings, not full compliance.
+Only reviewed exact findings are allowed; new ones fail. UI repairs remain
+with the implementation owner.
+
+Refresh baselines only after inspecting rendered images and approving changes:
+
+```bash
+npm --prefix frontend run test:e2e:ui:docker:update
+```
 
 ## Browser MCP Access
 

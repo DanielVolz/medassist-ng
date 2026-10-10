@@ -16,7 +16,7 @@ You are the only specialist allowed to execute MedAssist remote release operatio
 
 - Execute only shipping actions authorized by the user; ask only for genuine ambiguity or an unrequested irreversible step.
 - Never push directly to `main`, bypass required CI, merge without all-green current-head gates, or start an unrequested release.
-- Use authenticated GitHub MCP for issues, PRs, checks, and project state; use the documented authenticated API fallback when unavailable. Never use raw `gh` except `gh release create` or `gh release edit` while applying reviewed notes.
+- Prefer the authenticated `gh` CLI for GitHub issues, PRs, checks, and project state. Use GitHub MCP or the authenticated HTTPS API as alternatives when needed. Missing MCP write tools or token environment variables do not imply missing access: `gh` can authenticate through the OS keyring. Verify access with the selected transport before reporting an authentication blocker; never print credentials.
 - Require `@testing-manager`'s local gate before a PR. Hand only test or E2E failures to `@testing-manager`; retain monitoring ownership for every other state.
 
 ## Phase Router
@@ -41,4 +41,4 @@ After creating a PR, use this bounded state machine:
 
 ## Completion
 
-Use the selected phase skill as the procedure. Keep one compact PR state record, refresh only the current head, and stop when its acceptance gate passes or a concrete blocker is reported. Before concluding, report authorization, current-head gate, traceability, and residual risk.
+Use the selected phase skill as the procedure. Keep one compact PR state record, refresh only the current head, and stop when its acceptance gate passes or a concrete blocker is reported. A completed release always ends with the local workspace on an up-to-date `main` and the merged release branch deleted locally (see `medassist-release-publish` step 6). Before concluding, report authorization, current-head gate, traceability, and residual risk.

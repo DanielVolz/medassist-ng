@@ -29,6 +29,23 @@ product implementation beyond identifying the repair owner.
 - Keep mocks minimal, avoid timing-only assertions, and include boundary/error
   cases proportionate to risk.
 
+## Medication Editor UI Gate
+
+- Extend `frontend/e2e/medication-ui-regression.spec.ts` using the opt-in `uiTest`
+  fixture when real light/dark themes and motion preferences matter. Preserve the
+  ordinary fixture's existing behavior.
+- Cover both desktop and mobile edit paths with deterministic fictional records;
+  use geometry, scroll/action reachability, keyboard, and error-state assertions
+  alongside the four visual references.
+- The scoped axe audit permits exact reviewed existing rule/target findings,
+  not blanket rule exclusions or a claim of full accessibility compliance.
+  Report existing defects separately; do not silently approve new findings.
+- Shared auth and destructive seed helpers are not worker-safe. Parallel coverage
+  requires isolated accounts/data or separate containers, not just more workers.
+- Baseline changes require rendered-image review and the explicit Docker update
+  command documented in `docs/DEVELOPMENT.md`. Then hand execution to
+  `medassist-test-local-validation` and compare without update mode.
+
 ## Output
 
 Report selected layer, test location, regression criteria, required coverage or

@@ -17,6 +17,10 @@ Keep docs consistent with actual product behavior and avoid stale setup/run guid
 2. If ENV/config changed, update documented variables/defaults.
 3. If workflow/commands changed, update setup/run instructions.
 4. If user-facing behavior changed, update user-facing description.
+5. If agents need a new reusable command, tool, or validation workflow, update
+   its owning skill or add a short agent reference. Keep canonical policy in
+   `AGENTS.md` and command details in `docs/DEVELOPMENT.md`; do not rely only on
+   ignored local memory or duplicate procedures across unrelated agents.
 
 ## Candidate Documentation Files
 

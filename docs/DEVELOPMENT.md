@@ -98,6 +98,18 @@ sensitive debugging artifacts, not sanitized logs.
 
 `npm --prefix frontend run test:e2e:all` owns its server URLs and runs Chromium core and data tests together, then runs Firefox and WebKit in separate Playwright processes. Each browser batch receives fresh backend data, an isolated authentication-state file, and temporary result output, so sensitive authentication route limits do not accumulate across browsers and existing report/results directories are not cleared. Successful runs remove their temporary workspace; failed runs print and retain its path for diagnostics. Use the direct Playwright CLI when targeting an externally managed server.
 
+## Workspace MCP Servers
+
+Repository MCP connections are defined in `.mcp.json`. Start MCP-capable editors
+from the repository workspace so the configured `scripts/` launchers resolve.
+The GitHub launcher requires authenticated `gh` CLI access and Docker; it reads
+the credential through `gh auth token` and starts the pinned official server.
+The SQLite launcher uses `data/medassist-ng.db` by default, creates a temporary
+read-only snapshot, and exposes read-only query/schema tools. It can also be
+given a different database path as its first argument. Treat local database
+contents as private; use only authorized queries and never use private records
+to test connectivity (`SELECT 1` is sufficient).
+
 For the focused authenticated medication-editor UI regressions, run:
 
 ```bash

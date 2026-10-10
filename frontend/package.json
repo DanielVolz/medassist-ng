@@ -27,6 +27,7 @@
     "test:e2e:ci:core:b": "rm -rf test-results && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 playwright test --config=playwright.stable.config.ts --project=chromium e2e/auth-session.spec.ts e2e/dashboard.spec.ts e2e/domain-safety.spec.ts e2e/export-import.spec.ts e2e/med-detail-footer-actions.spec.ts e2e/mobile-modal-history.spec.ts e2e/modal-layout-contract.spec.ts e2e/planner.spec.ts e2e/settings.spec.ts",
     "pretest:e2e:ci:data": "npm --prefix ../shared run build",
     "test:e2e:ci:data": "rm -rf test-results && PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 playwright test --config=playwright.stable.config.ts --project=chromium-data",
+    "test:e2e:ci:ui": "PLAYWRIGHT_UI_TESTS=true PLAYWRIGHT_HTML_OPEN=never PLAYWRIGHT_WORKERS=1 playwright test --config=playwright.stable.config.ts --project=chromium-ui",
     "pretest:e2e:domain": "npm --prefix ../shared run build",
     "test:e2e:domain": "rm -rf test-results && playwright test --config=playwright.stable.config.ts e2e/domain-safety.spec.ts",
     "pretest:e2e:all": "npm --prefix ../shared run build",
@@ -37,6 +38,8 @@
     "test:e2e:all:with-video": "npm run test:e2e:all && npm run test:e2e:video",
     "test:e2e:video": "find \"$PWD/test-results\" -name video.webm -not -path '*retry*' -print0 | xargs -0 ls -tr > /tmp/e2e-videos.list && if [ -s /tmp/e2e-videos.list ]; then sed \"s/^/file '/\" /tmp/e2e-videos.list | sed \"s/$/'/\" > /tmp/e2e-videos.txt && ffmpeg -y -f concat -safe 0 -i /tmp/e2e-videos.txt -c copy test-results/all-tests.webm; else echo 'No videos found to merge'; fi",
     "test:e2e:ui": "playwright test --config=playwright.stable.config.ts --ui",
+    "test:e2e:ui:docker": "node scripts/run-ui-e2e-docker.mjs",
+    "test:e2e:ui:docker:update": "node scripts/run-ui-e2e-docker.mjs --update-snapshots",
     "test:e2e:headed": "playwright test --config=playwright.stable.config.ts --headed",
     "test:e2e:debug": "playwright test --config=playwright.stable.config.ts --debug",
     "test:e2e:report": "playwright show-report"
@@ -60,8 +63,9 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@biomejs/biome": "2.4.15",
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.6.4",

@@ -31,6 +31,8 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 	const excludeDomainSafety = env.PLAYWRIGHT_EXCLUDE_DOMAIN_SAFETY === "true";
 	const reuseExistingServer = env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "true";
 	const parsedWorkers = Number.parseInt(env.PLAYWRIGHT_WORKERS ?? "", 10);
+	const uiRunId = Date.now();
+	const uiOutputDir = env.PLAYWRIGHT_OUTPUT_DIR ?? `test-results/ui-e2e-${uiRunId}`;
 	// Default to single-worker execution to keep API-seeded E2E suites deterministic.
 	// Still allow explicit local overrides via PLAYWRIGHT_WORKERS.
 	const workers = Number.isFinite(parsedWorkers) && parsedWorkers > 0 ? parsedWorkers : 1;
@@ -56,7 +58,8 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		["SMTP_PASS", "playwright-test-smtp-password"],
 	];
 	const frontendEnv = [["BACKEND_URL", apiBaseURL]];
-	const chromiumTestIgnore = /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/;
+	const chromiumTestIgnore =
+		/.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts|medication-ui-regression\.spec\.ts/;
 	const testIgnore = excludeDomainSafety ? [chromiumTestIgnore, /.*domain-safety\.spec\.ts/] : chromiumTestIgnore;
 
 	const projects: NonNullable<PlaywrightTestConfig["projects"]> = [
@@ -68,6 +71,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			name: "chromium",
 			use: {
 				...devices["Desktop Chrome"],
+				trace: "retain-on-failure",
 			},
 			testIgnore,
 			dependencies: ["setup"],
@@ -86,6 +90,32 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		},
 	];
 
+	if (env.PLAYWRIGHT_UI_TESTS === "true") {
+		projects.push({
+			name: "chromium-ui",
+			testMatch: /medication-ui-regression\.spec\.ts/,
+			use: {
+				...devices["Desktop Chrome"],
+				viewport: { width: 1280, height: 900 },
+				deviceScaleFactor: 1,
+				locale: "en-US",
+				timezoneId: "UTC",
+				colorScheme: "light",
+				reducedMotion: "no-preference",
+				trace: {
+					mode: "retain-on-failure",
+					snapshots: true,
+					sources: false,
+					screenshots: true,
+					attachments: false,
+				},
+			},
+			dependencies: ["setup"],
+			retries: env.CI ? 1 : 0,
+			outputDir: uiOutputDir,
+		});
+	}
+
 	if (runAllBrowsers) {
 		projects.push(
 			{
@@ -93,7 +123,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 				use: {
 					...devices["Desktop Firefox"],
 				},
-				testIgnore: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
+				testIgnore: chromiumTestIgnore,
 				dependencies: ["setup"],
 			},
 			{
@@ -101,7 +131,7 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 				use: {
 					...devices["Desktop Safari"],
 				},
-				testIgnore: /.*-(?:data|crud|edit|status|schedule|lifecycle)\.spec\.ts|performance\.spec\.ts/,
+				testIgnore: chromiumTestIgnore,
 				dependencies: ["setup"],
 			}
 		);
@@ -118,9 +148,10 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 		forbidOnly: !!env.CI,
 		retries: env.CI ? 2 : 0,
 		workers,
+		updateSnapshots: env.PLAYWRIGHT_UI_TESTS === "true" ? "none" : undefined,
 		reporter: env.CI
-			? [["html", { outputFolder: "playwright-report" }], ["github"]]
-			: [["html", { outputFolder: "playwright-report" }], ["list"]],
+			? [["html", { outputFolder: env.PLAYWRIGHT_HTML_OUTPUT_DIR || "playwright-report" }], ["github"]]
+			: [["html", { outputFolder: env.PLAYWRIGHT_HTML_OUTPUT_DIR || "playwright-report" }], ["list"]],
 		use: {
 			baseURL,
 			trace: "on-first-retry",
@@ -131,7 +162,10 @@ export function buildPlaywrightConfig(runAllBrowsers: boolean) {
 			actionTimeout: 5000,
 		},
 		projects,
-		outputDir: "test-results/",
+		outputDir:
+			env.PLAYWRIGHT_UI_TESTS === "true"
+				? (env.PLAYWRIGHT_SETUP_OUTPUT_DIR ?? `test-results/ui-setup-${uiRunId}`)
+				: "test-results/",
 		webServer: [
 			{
 				command: `cd ../backend && npm --prefix ../shared run build && ${backendEnv

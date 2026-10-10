@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { test as base, expect, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 /** Storage state path for authenticated sessions */
 export const authFile = process.env.PLAYWRIGHT_AUTH_FILE || path.join(import.meta.dirname, "..", ".auth", "user.json");
@@ -128,6 +128,44 @@ export const test = base.extend<object>({
 		await applyVideoSafetyMode(page);
 		await setupAuthMeMock(page);
 		await use(page);
+	},
+});
+
+/**
+ * Opt-in browser fixture for UI regressions that must retain real theme and
+ * motion behavior. Failure-only diagnostics record console errors and network
+ * failures without request headers, bodies, or URL query strings.
+ */
+export const uiTest = base.extend<object>({
+	page: async ({ page }, use, testInfo: TestInfo) => {
+		const diagnostics = { consoleErrors: 0, pageErrors: 0, failedRequests: 0, httpErrorStatuses: [] as number[] };
+
+		page.on("console", (message) => {
+			if (message.type() === "error") diagnostics.consoleErrors += 1;
+		});
+		page.on("pageerror", () => {
+			diagnostics.pageErrors += 1;
+		});
+		page.on("requestfailed", () => {
+			diagnostics.failedRequests += 1;
+		});
+		page.on("response", (response) => {
+			if (response.status() >= 400 && diagnostics.httpErrorStatuses.length < 40) {
+				diagnostics.httpErrorStatuses.push(response.status());
+			}
+		});
+
+		await setupAuthMeMock(page);
+		await use(page);
+		if (testInfo.status !== testInfo.expectedStatus) {
+			const diagnosticPath = testInfo.outputPath("ui-safe-diagnostics.json");
+			await fs.promises.mkdir(path.dirname(diagnosticPath), { recursive: true });
+			await fs.promises.writeFile(diagnosticPath, JSON.stringify(diagnostics, null, 2));
+			await testInfo.attach("ui-safe-diagnostics", {
+				path: diagnosticPath,
+				contentType: "application/json",
+			});
+		}
 	},
 });
 

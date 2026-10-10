@@ -23,8 +23,11 @@
 			]
 		},
 		"github": {
-			"type": "http",
-			"url": "https://api.githubcopilot.com/mcp/x/all",
+			"type": "local",
+			"command": "node",
+			"args": [
+				"scripts/mcp-github.mjs"
+			],
 			"tools": [
 				"*"
 			]
@@ -61,16 +64,9 @@
 		},
 		"sqlite": {
 			"type": "local",
-			"command": "npx",
+			"command": "node",
 			"args": [
-				"-y",
-				"db-mcp@5.0.1",
-				"--transport",
-				"stdio",
-				"--sqlite-native",
-				"${workspaceFolder}/data/medassist-ng.db",
-				"--tool-filter",
-				"read_query,list_tables,describe_table,-sqlite_execute_code"
+				"scripts/mcp-sqlite.mjs"
 			],
 			"tools": [
 				"*"

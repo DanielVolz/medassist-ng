@@ -1,6 +1,7 @@
 {
   "workspaces": {
     ".": {
+      "entry": ["scripts/mcp-sqlite.mjs", "scripts/mcp-github.mjs"],
       "ignoreDependencies": ["husky", "lint-staged"],
       "ignoreBinaries": ["husky"]
     },

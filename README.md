@@ -64,6 +64,8 @@ Overview with stock status, reorder reminders, and upcoming schedules.
 <summary>Medication Detail</summary>
 
 View medication details, stock information, and intake schedule.
+The dashboard keeps medication names fully visible, wrapping names and supporting stock information to fit narrower windows.
+On mobile, closing an editor opened from medication details returns to those details. Unsaved changes still require confirmation before leaving.
 
 <img src="docs/screenshots/medication-detail-modal.png" alt="Medication Detail Modal" width="100%" />
 

@@ -165,7 +165,8 @@ vi.mock("../../hooks/useUnsavedChangesWarning", () => ({
 }));
 
 vi.mock("../../hooks/useModalHistory", () => ({
-	useModalHistory: vi.fn(),
+	registerHistoryPopGuard: vi.fn(() => () => {}),
+	useModalHistory: vi.fn(() => ({ closeModal: vi.fn() })),
 }));
 
 vi.mock("../../context", () => ({

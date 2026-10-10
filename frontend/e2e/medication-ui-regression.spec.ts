@@ -355,7 +355,7 @@ test.describe("Medication editor UI regressions", () => {
 	test.describe("mobile modal keyboard focus", () => {
 		test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-		test("keeps Tab focus in the dialog and Escape restores the prior route", async ({ page }) => {
+		test("keeps Tab focus in the dialog and Escape restores the medication list", async ({ page }) => {
 			await setRealTheme(page, "light");
 			await navigateTo(page, "/dashboard");
 			const routeOpener = page.getByTestId("main-nav").getByRole("button", { name: "Medications", exact: true });
@@ -376,7 +376,7 @@ test.describe("Medication editor UI regressions", () => {
 			await expect(first).toBeFocused();
 			await page.keyboard.press("Escape");
 			await expect(editor).not.toBeVisible();
-			await expect(page.getByRole("heading", { name: /^Dashboard$/i })).toBeVisible();
+			await expect(page.getByRole("heading", { name: /^Medications$/i })).toBeVisible();
 		});
 	});
 

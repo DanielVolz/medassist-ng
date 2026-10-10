@@ -239,6 +239,26 @@ test("release preflight rejects E2E CI without the core-b shard", () => {
   }
 });
 
+test("medication UI artifact upload allows only sanitized evidence formats", () => {
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/e2e.yml"), "utf8");
+  const uploadStep = workflow.match(
+    /      - name: Upload sanitized medication UI failure evidence\n((?:        .*\n)+)/
+  );
+
+  assert.ok(uploadStep, "expected the dedicated medication UI evidence upload step");
+  const uploadedPaths = uploadStep[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("frontend/test-results/"));
+
+  assert.deepEqual(uploadedPaths, [
+    "frontend/test-results/ui-e2e/**/*.png",
+    "frontend/test-results/ui-e2e/**/*.webm",
+    "frontend/test-results/ui-e2e/**/ui-safe-diagnostics*.json",
+    "frontend/test-results/ui-e2e/**/ui-failure-diagnostics*.json",
+  ]);
+});
+
 test("release preflight rejects frontend CI without the static check before build", () => {
   const fixtureRoot = copyFixture();
   try {

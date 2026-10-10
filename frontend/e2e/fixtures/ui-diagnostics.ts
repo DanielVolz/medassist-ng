@@ -160,7 +160,13 @@ export function collectUiDomDiagnostics(targets: AxeDiagnosticTarget[]): UiDomDi
 		};
 	};
 
-	const editor = document.querySelector('[data-ui-a11y-scope="true"], [role="dialog"], aside[data-open="true"]');
+	const editor = Array.from(
+		document.querySelectorAll('[data-ui-a11y-scope="true"], [role="dialog"], aside[data-open="true"]')
+	).find((element) => {
+		const style = getComputedStyle(element);
+		const rect = element.getBoundingClientRect();
+		return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+	});
 	const selected = [
 		{ kind: "heading", selector: "h2", limit: 4 },
 		{ kind: "form", selector: "form", limit: 4 },

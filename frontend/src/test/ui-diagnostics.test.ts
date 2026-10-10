@@ -11,7 +11,44 @@ import {
 	sanitizeAxeContrast,
 } from "../../e2e/fixtures/ui-diagnostics";
 
+function setElementBounds(element: Element, width: number, height: number) {
+	vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+		x: 0,
+		y: 0,
+		left: 0,
+		top: 0,
+		right: width,
+		bottom: height,
+		width,
+		height,
+		toJSON: () => ({}),
+	} as DOMRect);
+}
+
 describe("safe UI failure diagnostics", () => {
+	it("selects the visible mobile dialog instead of a hidden desktop editor", () => {
+		document.body.innerHTML = `
+			<aside data-open="true" style="display: none">
+				<form><input></form>
+			</aside>
+			<div role="dialog">
+				<form><input></form>
+			</div>
+		`;
+		const hiddenDesktop = document.querySelector("aside")!;
+		const mobileDialog = document.querySelector('[role="dialog"]')!;
+		setElementBounds(hiddenDesktop, 0, 0);
+		setElementBounds(mobileDialog, 320, 600);
+
+		const diagnostics = collectUiDomDiagnostics([]);
+
+		expect(diagnostics.elements[0]).toMatchObject({
+			kind: "editor",
+			tag: "div",
+			box: { width: 320, height: 600 },
+		});
+	});
+
 	it("measures selected UI geometry and style without serializing element text or selectors", () => {
 		const hiddenValue = "SAFE-DIAGNOSTIC-PRIVATE-MARKER";
 		document.body.innerHTML = `
@@ -25,6 +62,7 @@ describe("safe UI failure diagnostics", () => {
 				</form>
 			</aside>
 		`;
+		setElementBounds(document.querySelector("aside")!, 320, 600);
 		document.documentElement.dataset.theme = "dark";
 		const contrast = sanitizeAxeContrast({
 			data: {

@@ -3,13 +3,38 @@ import { useCallback, useEffect, useRef } from "react";
 type ModalHistoryOptions = {
 	state?: Record<string, unknown>;
 	minOpenMs?: number;
+	reuseCurrentEntry?: boolean;
 };
 
 type ModalHistoryController = {
 	closeModal: () => void;
 };
 
+type HistoryPopGuard = () => boolean;
+
 const modalStack: symbol[] = [];
+const historyPopGuards = new Set<HistoryPopGuard>();
+
+if (typeof window !== "undefined") {
+	window.addEventListener(
+		"popstate",
+		(event) => {
+			for (const guard of [...historyPopGuards].reverse()) {
+				if (!guard()) continue;
+				event.stopImmediatePropagation();
+				return;
+			}
+		},
+		true
+	);
+}
+
+export function registerHistoryPopGuard(guard: HistoryPopGuard) {
+	historyPopGuards.add(guard);
+	return () => {
+		historyPopGuards.delete(guard);
+	};
+}
 
 // Programmatic closeModal() pops its own history entry via history.back().
 // The resulting popstate must NOT be claimed by the next modal on the stack
@@ -74,7 +99,14 @@ export function useModalHistory(
 		if (isOpen) {
 			if (!pushedRef.current) {
 				clearPendingProgrammaticPops();
-				window.history.pushState({ modal: modalKey, ...stateRef.current }, "");
+				const currentState = window.history.state;
+				const canReuseEntry =
+					options.reuseCurrentEntry &&
+					currentState?.modal === modalKey &&
+					Object.entries(stateRef.current ?? {}).every(([key, value]) => currentState[key] === value);
+				if (!canReuseEntry) {
+					window.history.pushState({ modal: modalKey, ...stateRef.current }, "");
+				}
 				pushedRef.current = true;
 				openedAtRef.current = Date.now();
 				modalStack.push(idRef.current);
@@ -87,7 +119,7 @@ export function useModalHistory(
 
 		pushedRef.current = false;
 		removeFromStack(idRef.current);
-	}, [isOpen, modalKey]);
+	}, [isOpen, modalKey, options.reuseCurrentEntry]);
 
 	const closeModal = useCallback(() => {
 		if (!isOpen || !pushedRef.current) return;

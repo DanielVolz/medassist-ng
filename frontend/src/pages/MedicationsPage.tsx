@@ -6,7 +6,7 @@ import { ActionIcon } from "@mantine/core";
 import { Bell, Minus, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { useAuth } from "../components/Auth";
 import { DateInput, MonthInput } from "../components/DateInput";
 import { FormNumberStepper } from "../components/FormNumberStepper";
@@ -32,7 +32,7 @@ import {
 	useMedicationEnrichmentController,
 } from "../hooks/useMedicationEnrichmentController";
 import { useMedicationForm } from "../hooks/useMedicationForm";
-import { useModalHistory } from "../hooks/useModalHistory";
+import { registerHistoryPopGuard, useModalHistory } from "../hooks/useModalHistory";
 import { useUnsavedChangesWarning } from "../hooks/useUnsavedChangesWarning";
 import type {
 	DoseUnit,
@@ -237,6 +237,7 @@ async function getMedicationEnrichmentErrorMessage(
 }
 
 export function MedicationsPage() {
+	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const { t } = useTranslation();
 	const { user, authFetch } = useAuth();
@@ -312,9 +313,13 @@ export function MedicationsPage() {
 	// Mobile modal state (declared early because it's used in useEffect below)
 	const [showEditModal, setShowEditModal] = useState(pendingEditTransition && window.innerWidth <= 768);
 	const showEditModalRef = useRef(false);
+	const mobileEditHistoryUrlRef = useRef<string | null>(null);
 	useEffect(() => {
 		showEditModalRef.current = showEditModal;
 	}, [showEditModal]);
+	useEffect(() => {
+		if (showEditModal) mobileEditHistoryUrlRef.current = window.location.href;
+	}, [location.key, location.pathname, location.search, showEditModal]);
 	const processedMedicationLinkRef = useRef<string | null>(null);
 	const hasDesktopFormHistoryState = useRef(false);
 
@@ -374,6 +379,30 @@ export function MedicationsPage() {
 	// Confirmation modal for unsaved changes
 	const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 	const [unsavedConfirmSource, setUnsavedConfirmSource] = useState<"mobile-edit" | "desktop-form" | null>(null);
+	const formChangedRef = useRef(formChanged);
+	formChangedRef.current = formChanged;
+	const showUnsavedConfirmRef = useRef(showUnsavedConfirm);
+	showUnsavedConfirmRef.current = showUnsavedConfirm;
+	const cancellingUnsavedConfirmRef = useRef(false);
+	const mobileEditPopGuardRef = useRef<() => boolean>(() => false);
+	mobileEditPopGuardRef.current = () => {
+		if (
+			!showEditModalRef.current ||
+			!formChangedRef.current ||
+			showUnsavedConfirmRef.current ||
+			closeConfirmedRef.current ||
+			cancellingUnsavedConfirmRef.current
+		) {
+			return false;
+		}
+		const editorUrl = mobileEditHistoryUrlRef.current;
+		if (!editorUrl) return false;
+
+		window.history.pushState({ modal: "edit" }, "", editorUrl);
+		setUnsavedConfirmSource("mobile-edit");
+		setShowUnsavedConfirm(true);
+		return true;
+	};
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [deleteCandidate, setDeleteCandidate] = useState<Medication | null>(null);
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
@@ -522,7 +551,15 @@ export function MedicationsPage() {
 	const [readOnlyView, setReadOnlyView] = useState(false);
 	const [showReportModal, setShowReportModal] = useState(false);
 	useModalHistory(!!lightboxImage, "medication-image-lightbox", closeLightbox);
-	useModalHistory(showUnsavedConfirm, "medication-unsaved-confirm", handleCancelClose);
+	const { closeModal: closeUnsavedConfirm } = useModalHistory(
+		showUnsavedConfirm,
+		"medication-unsaved-confirm",
+		handleCancelClose
+	);
+	function cancelUnsavedConfirm() {
+		cancellingUnsavedConfirmRef.current = true;
+		closeUnsavedConfirm();
+	}
 	const [showNameValidation, setShowNameValidation] = useState(false);
 
 	useEffect(() => {
@@ -933,7 +970,8 @@ export function MedicationsPage() {
 			resetForm();
 			resetMedicationEnrichment();
 			setReadOnlyView(false);
-			window.history.back();
+			// Leave both the confirmation and its underlying editor history entry.
+			window.history.go(-2);
 		} else {
 			// Desktop form — reset and go back to grid
 			handleResetForm();
@@ -1226,7 +1264,15 @@ export function MedicationsPage() {
 
 	// Handle browser back button for modals and unsaved changes
 	useEffect(() => {
-		const handlePopState = () => {
+		return registerHistoryPopGuard(() => mobileEditPopGuardRef.current());
+	}, []);
+
+	useEffect(() => {
+		const handlePopState = (event: PopStateEvent) => {
+			if (cancellingUnsavedConfirmRef.current) {
+				cancellingUnsavedConfirmRef.current = false;
+				return;
+			}
 			const currentParams = new URLSearchParams(window.location.search);
 			const { mode: currentLinkMode, linkedMedId: currentMedicationLinkId } = getMedicationLinkState(currentParams);
 
@@ -1264,6 +1310,7 @@ export function MedicationsPage() {
 			if (showEditModal) {
 				// Check for unsaved changes (user pressed browser back directly)
 				if (formChanged) {
+					event.stopImmediatePropagation();
 					// Re-push history state to stay in modal
 					window.history.pushState({ modal: "edit" }, "");
 					// Show confirmation modal
@@ -1309,8 +1356,8 @@ export function MedicationsPage() {
 				setShowUnsavedConfirm(true);
 			}
 		};
-		window.addEventListener("popstate", handlePopState);
-		return () => window.removeEventListener("popstate", handlePopState);
+		window.addEventListener("popstate", handlePopState, true);
+		return () => window.removeEventListener("popstate", handlePopState, true);
 	}, [
 		showObsoleteConfirm,
 		showDeleteConfirm,
@@ -1321,17 +1368,6 @@ export function MedicationsPage() {
 		clearMedicationLinkParams,
 		getMedicationLinkState,
 	]);
-
-	// Close modal on Escape key
-	useEffect(() => {
-		const handleEscape = (e: KeyboardEvent) => {
-			if (e.key === "Escape" && showEditModal) {
-				closeEditModal();
-			}
-		};
-		document.addEventListener("keydown", handleEscape);
-		return () => document.removeEventListener("keydown", handleEscape);
-	}, [showEditModal, closeEditModal]);
 
 	function scrollToTopForDesktopEdit() {
 		if (window.innerWidth <= 768) return;
@@ -2350,7 +2386,7 @@ export function MedicationsPage() {
 					unsavedConfirmSource === "mobile-edit" ? t("common.back") : t("common.unsavedChanges.stay", "Stay")
 				}
 				onConfirmClose={handleConfirmClose}
-				onCancelClose={handleCancelClose}
+				onCancelClose={cancelUnsavedConfirm}
 				showNoScheduleConfirm={showNoScheduleConfirm}
 				noScheduleTitle={t("form.blisters.removeLastTitle")}
 				noScheduleMessage={t("form.blisters.removeLastMessage")}

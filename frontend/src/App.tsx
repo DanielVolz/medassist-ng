@@ -652,9 +652,24 @@ function AppContent() {
 		};
 	}, []);
 
+	const medicationDetailReturnRef = useRef<number | null>(null);
+
+	useEffect(() => {
+		const medId = medicationDetailReturnRef.current;
+		if (medId === null) return;
+		if (window.history.state?.modal === "medDetail" && window.history.state.medId === medId) {
+			medicationDetailReturnRef.current = null;
+			const medication = meds.find((med) => med.id === medId);
+			if (medication) setSelectedMed(medication);
+		} else if (location.pathname !== "/medications") {
+			medicationDetailReturnRef.current = null;
+		}
+	}, [location.pathname, meds, setSelectedMed]);
+
 	const handleOpenMedicationEdit = () => {
 		if (!selectedMed) return;
 		const medId = selectedMed.id;
+		medicationDetailReturnRef.current = medId;
 		routeTransitionMinEndRef.current = performance.now() + 80;
 		setRouteTransitionMaskActive(true);
 		if (routeTransitionFallbackTimerRef.current !== null) {

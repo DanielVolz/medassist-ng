@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useModalHistory } from "../../hooks/useModalHistory";
+import { registerHistoryPopGuard, useModalHistory } from "../../hooks/useModalHistory";
 
 describe("useModalHistory", () => {
 	beforeEach(() => {
@@ -9,6 +9,22 @@ describe("useModalHistory", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+	});
+
+	it("runs registered pop guards before later listeners and stops a handled pop", () => {
+		const guard = vi.fn(() => true);
+		const laterListener = vi.fn();
+		const unregister = registerHistoryPopGuard(guard);
+		window.addEventListener("popstate", laterListener);
+
+		act(() => {
+			window.dispatchEvent(new PopStateEvent("popstate"));
+		});
+
+		expect(guard).toHaveBeenCalledTimes(1);
+		expect(laterListener).not.toHaveBeenCalled();
+		unregister();
+		window.removeEventListener("popstate", laterListener);
 	});
 
 	it("pushes a modal history entry and closes the modal on browser back", () => {
@@ -34,6 +50,32 @@ describe("useModalHistory", () => {
 		renderHook(() => useModalHistory(true, "medDetail", onClose, { state: { medId: 42 } }));
 
 		expect(window.history.pushState).toHaveBeenCalledWith({ modal: "medDetail", medId: 42 }, "");
+	});
+
+	it("reuses a matching current history entry when opted in", () => {
+		vi.spyOn(window.history, "state", "get").mockReturnValue({ modal: "medDetail", medId: 42 });
+
+		renderHook(() =>
+			useModalHistory(true, "medDetail", vi.fn(), {
+				state: { medId: 42 },
+				reuseCurrentEntry: true,
+			})
+		);
+
+		expect(window.history.pushState).not.toHaveBeenCalled();
+	});
+
+	it("pushes a new entry when the current modal state does not match", () => {
+		vi.spyOn(window.history, "state", "get").mockReturnValue({ modal: "medDetail", medId: 42 });
+
+		renderHook(() =>
+			useModalHistory(true, "medDetail", vi.fn(), {
+				state: { medId: 43 },
+				reuseCurrentEntry: true,
+			})
+		);
+
+		expect(window.history.pushState).toHaveBeenCalledWith({ modal: "medDetail", medId: 43 }, "");
 	});
 
 	it("direct close closes locally and removes the modal history entry", () => {

@@ -30,6 +30,7 @@ export function useAppModals({ meds, refill }: AppModalsOptions) {
 	const { closeModal: closeMedDetail } = useModalHistory(Boolean(selectedMed), "medDetail", dismissMedDetail, {
 		state: medDetailHistoryState,
 		minOpenMs: 320,
+		reuseCurrentEntry: true,
 	});
 	const { closeModal: closeImageLightbox } = useModalHistory(showImageLightbox, "imageLightbox", dismissImageLightbox, {
 		minOpenMs: 320,

@@ -6,6 +6,39 @@
 docker compose -p medassist-dev -f docker-compose.dev.yml up
 ```
 
+## Open the Local UI Sandbox
+
+From the repository root, run:
+
+```bash
+npm run dev:ui
+```
+
+Once the API and Vite checks pass, the launcher prints a clickable
+`http://127.0.0.1:5176/dashboard` URL for VS Code's integrated browser. It does
+not open a system browser. The sandbox builds `shared/`, starts its own backend
+on `127.0.0.1:5177`, and proxies the frontend on `127.0.0.1:5176` to that
+backend. If either fixed port is busy, startup fails rather than reusing or
+changing another app.
+
+This is an explicitly local, unauthenticated demo using the application's
+existing anonymous identity. It is **not** a way to test registration,
+passwords, sessions, SSO, or other authenticated flows. The launcher passes a
+minimal backend environment, does not load repository `.env` files, and keeps
+the database and images under ignored `.ui-dev/data/`. No production auth or
+backend behavior is changed. The processes bind only to loopback; sample
+records use fictitious names and do not rely on external images, catalog
+lookups, email, or push notifications.
+Demo labels are intentionally playful (for example, "Sneezus Interruptus Deluxe"
+for "Professor Wobble McNoodle"); they are fictional UI fixtures, not medical advice.
+
+The initial sample records are created once. Subsequent starts retain the
+sandbox database and UI edits. An incomplete first seed stops with an error
+instead of silently reseeding data. Stop both owned processes with Ctrl+C
+before starting another copy. If startup reports an existing launcher lock
+after a crash, first confirm no sandbox process is running; only then remove
+the stale `.ui-dev/launcher.lock`.
+
 If you changed `docker-compose.dev.yml`, added new bind mounts, or introduced a new local package like `shared/`, do not rely on `docker compose restart` alone. Restarting reuses the old containers and does not apply mount changes. Recreate the development services instead:
 
 ```bash

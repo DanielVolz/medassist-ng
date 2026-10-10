@@ -249,6 +249,7 @@ jobs:
             frontend/test-results/ui-e2e/**/*.png
             frontend/test-results/ui-e2e/**/*.webm
             frontend/test-results/ui-e2e/**/ui-safe-diagnostics*.json
+            frontend/test-results/ui-e2e/*/attachments/ui-safe-diagnostics-*.json
             frontend/test-results/ui-e2e/**/ui-failure-diagnostics*.json
           if-no-files-found: ignore
           retention-days: 7

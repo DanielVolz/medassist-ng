@@ -255,8 +255,20 @@ test("medication UI artifact upload allows only sanitized evidence formats", () 
     "frontend/test-results/ui-e2e/**/*.png",
     "frontend/test-results/ui-e2e/**/*.webm",
     "frontend/test-results/ui-e2e/**/ui-safe-diagnostics*.json",
+    "frontend/test-results/ui-e2e/*/attachments/ui-safe-diagnostics-*.json",
     "frontend/test-results/ui-e2e/**/ui-failure-diagnostics*.json",
   ]);
+
+  const playwrightAttachmentPath = [
+    "frontend/test-results/ui-e2e",
+    "medication-ui-regression-prior-route-chromium-ui-retry1",
+    "attachments",
+    `ui-safe-diagnostics-${"a".repeat(40)}.json`,
+  ].join("/");
+  assert.match(
+    playwrightAttachmentPath,
+    /^frontend\/test-results\/ui-e2e\/[^/]+\/attachments\/ui-safe-diagnostics-[a-f0-9]{40}\.json$/
+  );
 });
 
 test("release preflight rejects frontend CI without the static check before build", () => {

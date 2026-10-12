@@ -78,12 +78,7 @@ jobs:
             const ref = context.payload.pull_request.head.sha;
             const e2eRelevant = '${{ steps.pr_changes.outputs.e2e }}' === 'true';
             const requiredChecks = ['Backend Tests', 'Frontend Build'];
-            const e2eLaneChecks = [
-              'Playwright E2E core (core-a)',
-              'Playwright E2E core (core-b)',
-              'Playwright E2E data',
-              'Playwright E2E medication UI',
-            ];
+            const e2eAggregateCheck = 'Playwright E2E Result';
             const legacyE2ECheck = 'Playwright E2E';
             const terminalFailures = new Set(['action_required', 'cancelled', 'failure', 'neutral', 'skipped', 'stale', 'startup_failure', 'timed_out']);
             const maxAttempts = 80;
@@ -134,16 +129,10 @@ jobs:
               if (!e2eRelevant) {
                 core.info('Playwright E2E: not relevant; preserving the workflow skip behavior.');
               } else {
-                const e2eLanes = e2eLaneChecks.map((checkName) => ({
-                  checkName,
-                  check: Array.from(checkMap.entries()).find(
-                    ([name]) => name === checkName || name.endsWith(` / ${checkName}`)
-                  )?.[1],
-                }));
-
-                for (const { checkName, check } of e2eLanes) {
-                  core.info(`${checkName}: ${check?.status ?? 'missing'} / ${check?.conclusion ?? 'pending'}`);
-                }
+                const e2eAggregate = Array.from(checkMap.entries()).find(
+                  ([name]) => name === e2eAggregateCheck || name.endsWith(` / ${e2eAggregateCheck}`)
+                )?.[1];
+                core.info(`${e2eAggregateCheck}: ${e2eAggregate?.status ?? 'missing'} / ${e2eAggregate?.conclusion ?? 'pending'}`);
                 core.info(`${legacyE2ECheck} commit status: ${legacyE2EStatus?.state ?? 'missing'}`);
 
                 if (['error', 'failure'].includes(legacyE2EStatus?.state)) {
@@ -152,23 +141,21 @@ jobs:
                   return;
                 }
 
-                if (e2eLanes.some(({ check }) => check?.conclusion && terminalFailures.has(check.conclusion))) {
-                  core.info('A Playwright E2E lane concluded unsuccessfully; skipping Container Smoke because the PR is already blocked.');
+                if (e2eAggregate?.conclusion && terminalFailures.has(e2eAggregate.conclusion)) {
+                  core.info(`${e2eAggregateCheck} concluded ${e2eAggregate.conclusion}; skipping Container Smoke because the PR is already blocked.`);
                   core.setOutput('should_run', 'false');
                   return;
                 }
 
-                for (const { checkName, check } of e2eLanes) {
-                  if (check?.conclusion !== 'success') {
-                    waitingFor.push(checkName);
-                  }
+                if (e2eAggregate?.conclusion !== 'success') {
+                  waitingFor.push(e2eAggregateCheck);
                 }
                 if (legacyE2EStatus?.state !== 'success') {
                   waitingFor.push(legacyE2ECheck);
                 }
 
-                if (e2eLanes.every(({ check }) => check?.conclusion === 'success') && legacyE2EStatus?.state === 'success') {
-                  core.info('Playwright E2E: all four lanes and the legacy commit status succeeded.');
+                if (e2eAggregate?.conclusion === 'success' && legacyE2EStatus?.state === 'success') {
+                  core.info('Playwright E2E aggregate and legacy commit status succeeded.');
                 }
               }
 

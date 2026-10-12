@@ -68,7 +68,8 @@ test("workflow source connects default PR selection to the selected runner and a
 	assert.match(e2eWorkflow, /target_sha: \$\{\{ steps\.select\.outputs\.target_sha \}\}/);
 	assert.match(e2eWorkflow, /matrix_groups: \$\{\{ steps\.select\.outputs\.matrix_groups \}\}/);
 	assert.match(e2eWorkflow, /group: \$\{\{ fromJSON\(needs\.selection\.outputs\.matrix_groups \|\| '\["none"\]'\) \}\}/);
-	assert.equal([...e2eWorkflow.matchAll(/ref: \$\{\{ needs\.selection\.outputs\.target_sha \}\}/g)].length, 2);
+	assert.doesNotMatch(e2eWorkflow, /ref: \$\{\{ needs\.selection\.outputs\.target_sha \}\}/);
+	assert.ok([...e2eWorkflow.matchAll(/ref: \$\{\{ github\.sha \}\}/g)].length >= 3);
 	assert.ok([...e2eWorkflow.matchAll(/ref: main/g)].length >= 4);
 	assert.match(e2eWorkflow, /E2E_GROUP: \$\{\{ matrix\.group \}\}/);
 	assert.match(e2eWorkflow, /run: node \.\.\/\.github\/scripts\/run-e2e-group\.mjs/);

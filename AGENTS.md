@@ -173,6 +173,7 @@ When fixing or reviewing UI that lives behind login or depends on authenticated 
 - New API fields belong end-to-end: route DTO/parsing, domain behavior if needed, DB compatibility path, frontend usage through `/api/*`.
 - Notification changes must update both `backend/src/services/reminder-scheduler.ts` and `backend/src/routes/planner.ts`.
 - Medication edit UI changes must update both `MedicationsPage.tsx` and `MobileEditModal`.
+- Every `frontend/e2e/*.spec.ts` file must belong to a Playwright CI group in `.github/scripts/select-e2e.mjs`. Update and run its inventory tests when adding, renaming, or removing a spec; unknown product paths select the full suite.
 
 ## No-Touch Zones
 

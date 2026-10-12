@@ -319,57 +319,38 @@ test("release preflight rejects a smoke gate without the legacy Playwright statu
   }
 });
 
-test("release preflight rejects a smoke gate without the data E2E lane", () => {
+test("release preflight rejects a smoke gate without the Playwright E2E aggregate", () => {
   const fixtureRoot = copyFixture();
   try {
     const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "              'Playwright E2E data',\n",
-      ""
+      "const e2eAggregateCheck = 'Playwright E2E Result';",
+      "const e2eAggregateCheck = 'Playwright E2E Summary';"
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must require all four Playwright E2E lanes/
+      /\.github\/workflows\/container-smoke\.yml must require the Playwright E2E aggregate check/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
 
-test("release preflight rejects a smoke gate without the medication UI E2E lane", () => {
+test("release preflight rejects a smoke gate that treats a missing E2E aggregate as success", () => {
   const fixtureRoot = copyFixture();
   try {
     const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "              'Playwright E2E medication UI',\n",
-      ""
+      "if (e2eAggregate?.conclusion !== 'success')",
+      "if (e2eAggregate?.conclusion === 'success')"
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must require all four Playwright E2E lanes/
-    );
-  } finally {
-    rmSync(fixtureRoot, { recursive: true, force: true });
-  }
-});
-
-test("release preflight rejects a smoke gate that treats missing E2E lanes as success", () => {
-  const fixtureRoot = copyFixture();
-  try {
-    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
-    const workflow = readFileSync(workflowPath, "utf8").replace(
-      "if (check?.conclusion !== 'success')",
-      "if (check?.conclusion === 'success')"
-    );
-    writeFileSync(workflowPath, workflow);
-
-    expectPreflightFailure(
-      fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must require every E2E lane and honor legacy commit-status failures/
+      /\.github\/workflows\/container-smoke\.yml must require the E2E aggregate and honor legacy commit-status failures/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

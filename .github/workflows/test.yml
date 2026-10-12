@@ -1,27 +1,9 @@
 name: Test
 
-# Keep required PR checks active for workflow-only synchronization changes.
+# Trigger for every PR path; job-level filters keep unrelated checks lightweight.
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'README.md'
-      - 'backend/**'
-      - 'frontend/**'
-      - 'shared/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'knip.jsonc'
-      - 'release-policy.json'
-      - 'scripts/**'
-      - 'biome.json'
-      - '.github/workflows/test.yml'
-      - '.github/workflows/e2e.yml'
-      - 'AGENTS.md'
-      - '.github/copilot-instructions.md'
-      - '.github/agents/**'
-      - '.github/skills/**'
-      - '.github/prompts/**'
 
 # Minimal permissions for security
 permissions:
@@ -41,6 +23,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       agent-harness: ${{ steps.filter.outputs.agent-harness }}
+      e2e-selector: ${{ steps.filter.outputs.e2e-selector }}
       knip: ${{ steps.filter.outputs.knip }}
     steps:
       - uses: dorny/paths-filter@v4
@@ -59,7 +42,8 @@ jobs:
               - 'package.json'
               - 'release-policy.json'
               - 'biome.json'
-              - '.github/workflows/e2e.yml'
+              - '.github/workflows/**'
+              - '.github/scripts/**'
             agent-harness:
               - 'package.json'
               - 'scripts/validate-agent-harness.mjs'
@@ -69,6 +53,10 @@ jobs:
               - '.github/agents/**'
               - '.github/skills/**'
               - '.github/workflows/test.yml'
+            e2e-selector:
+              - '.github/scripts/**'
+              - '.github/workflows/e2e.yml'
+              - 'frontend/e2e/**'
             knip:
               - 'backend/**'
               - 'frontend/**'
@@ -123,16 +111,16 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Skip agent harness when unchanged
-        if: needs.changes.outputs.agent-harness != 'true'
-        run: echo "No agent-harness changes detected; required check passes without validation."
+      - name: Skip agent and E2E selector checks when unchanged
+        if: needs.changes.outputs.agent-harness != 'true' && needs.changes.outputs.e2e-selector != 'true'
+        run: echo "No agent-harness or E2E-selector changes detected; check passes without validation."
 
       - name: Checkout repository
-        if: needs.changes.outputs.agent-harness == 'true'
+        if: needs.changes.outputs.agent-harness == 'true' || needs.changes.outputs.e2e-selector == 'true'
         uses: actions/checkout@v7
 
       - name: Setup Node.js
-        if: needs.changes.outputs.agent-harness == 'true'
+        if: needs.changes.outputs.agent-harness == 'true' || needs.changes.outputs.e2e-selector == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -140,6 +128,10 @@ jobs:
       - name: Validate agent harness
         if: needs.changes.outputs.agent-harness == 'true'
         run: npm run test:agent-harness && npm run validate:agent-harness
+
+      - name: Test E2E selector and spec inventory
+        if: needs.changes.outputs.e2e-selector == 'true'
+        run: node --test .github/scripts/select-e2e.test.mjs
 
   # =============================================================================
   # Backend Tests (always emits the required check context)
@@ -285,7 +277,8 @@ jobs:
     needs: [changes, backend-test, frontend-build]
     uses: ./.github/workflows/e2e.yml
     with:
-      run_e2e: ${{ needs.backend-test.result == 'success' && needs.frontend-build.result == 'success' && (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true') }}
+      upstream_success: ${{ needs.backend-test.result == 'success' && needs.frontend-build.result == 'success' }}
+      selection_mode: pull_request
     permissions:
       contents: read
       pull-requests: read

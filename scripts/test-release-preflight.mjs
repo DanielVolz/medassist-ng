@@ -31,7 +31,8 @@ function copyFixture() {
     ".github/workflows/container-smoke.yml",
     ".github/workflows/dependabot-automerge.yml",
     ".github/workflows/test.yml",
-    ".github/workflows/e2e.yml"
+    ".github/workflows/e2e.yml",
+    ".github/scripts/select-e2e.mjs"
   ];
 
   for (const relativePath of pathsToCopy) {
@@ -191,16 +192,13 @@ test("release preflight rejects local backend coverage that excludes the domain 
 test("release preflight rejects a core shard without frontend domain safety coverage", () => {
   const fixtureRoot = copyFixture();
   try {
-    const frontendPackage = readJson(fixtureRoot, "frontend/package.json");
-    frontendPackage.scripts["test:e2e:ci:core:b"] = frontendPackage.scripts["test:e2e:ci:core:b"].replace(
-      " e2e/domain-safety.spec.ts",
-      ""
-    );
-    writeJson(fixtureRoot, "frontend/package.json", frontendPackage);
+    const selectorPath = path.join(fixtureRoot, ".github/scripts/select-e2e.mjs");
+    const selector = readFileSync(selectorPath, "utf8").replace('\t\t"domain-safety.spec.ts",\n', "");
+    writeFileSync(selectorPath, selector);
 
     expectPreflightFailure(
       fixtureRoot,
-      /frontend\/package\.json test:e2e:ci:core:b must run the core-b Chromium shard non-interactively with frontend\/e2e\/domain-safety\.spec\.ts/
+      /\.github\/scripts\/select-e2e\.mjs must assign the frontend domain safety E2E to core-b/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -220,19 +218,16 @@ test("release preflight rejects CI workflow without the domain safety release ga
   }
 });
 
-test("release preflight rejects E2E CI without the core-b shard", () => {
+test("release preflight rejects E2E selector without the core-b Chromium group", () => {
   const fixtureRoot = copyFixture();
   try {
-    const workflowPath = path.join(fixtureRoot, ".github/workflows/e2e.yml");
-    const workflow = readFileSync(workflowPath, "utf8").replace(
-      "          - id: core-b\n            script: test:e2e:ci:core:b\n",
-      ""
-    );
-    writeFileSync(workflowPath, workflow);
+    const selectorPath = path.join(fixtureRoot, ".github/scripts/select-e2e.mjs");
+    const selector = readFileSync(selectorPath, "utf8").replace('\t"core-b",\n', "");
+    writeFileSync(selectorPath, selector);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/e2e\.yml must run the approved core-a and core-b Chromium E2E matrix/
+      /\.github\/scripts\/select-e2e\.mjs must keep both approved core Chromium groups in the selector/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });

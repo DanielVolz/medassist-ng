@@ -3,199 +3,164 @@ name: E2E Tests
 on:
   workflow_call:
     inputs:
-      run_e2e:
+      upstream_success:
         required: false
         type: boolean
-        default: false
+        default: true
+      selection_mode:
+        required: false
+        type: string
+        default: pull_request
+      groups:
+        required: false
+        type: string
+        default: full
+  workflow_dispatch:
+    inputs:
+      groups:
+        description: "Comma-separated groups: full, core-a, core-b, medication-data, planning-data, ui, performance"
+        required: true
+        default: full
+        type: string
+  schedule:
+    - cron: "23 3 * * 0"
 
-# Minimal permissions for security
 permissions:
   contents: read
 
 jobs:
-  changes:
-    name: Detect E2E relevance
+  selection:
+    name: Select Playwright coverage
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
     outputs:
-      e2e_relevant: ${{ steps.filter.outputs.e2e_relevant }}
+      groups: ${{ steps.select.outputs.groups }}
+      matrix_groups: ${{ steps.select.outputs.matrix_groups }}
+      ui_selected: ${{ steps.select.outputs.ui_selected }}
+      reason: ${{ steps.select.outputs.reason }}
+      target_sha: ${{ steps.select.outputs.target_sha }}
     steps:
-      - id: filter
-        run: echo "e2e_relevant=${{ inputs.run_e2e }}" >> "$GITHUB_OUTPUT"
+      - name: Require manual selection from the default branch
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run the manual E2E workflow from the default branch (main)."
+          exit 1
 
-  e2e-core:
-    name: Playwright E2E core (${{ matrix.id }})
-    needs: changes
+      - name: Checkout exact PR merge commit
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Select deterministic browser groups
+        id: select
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          SELECTION_MODE: ${{ inputs.selection_mode || github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          TARGET_REF: ${{ github.ref }}
+          TARGET_SHA: ${{ github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          UPSTREAM_SUCCESS: ${{ inputs.upstream_success }}
+          MANUAL_GROUPS: ${{ inputs.groups }}
+        run: node .github/scripts/select-e2e.mjs
+
+  playwright-standard:
+    name: Playwright E2E (${{ matrix.group }})
+    needs: selection
+    if: needs.selection.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      CI: true
+      PLAYWRIGHT_WORKERS: 1
+      PLAYWRIGHT_HTML_OPEN: never
+      JWT_SECRET: e2e-test-secret-that-is-long-enough
+      SESSION_SECRET: e2e-test-session-secret-long-enough
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - id: core-a
-            script: test:e2e:ci:core:a
-          - id: core-b
-            script: test:e2e:ci:core:b
+        group: ${{ fromJSON(needs.selection.outputs.matrix_groups || '["none"]') }}
     permissions:
       contents: read
-
     steps:
-      - name: Skip core E2E when change is not release/e2e-relevant
-        if: needs.changes.outputs.e2e_relevant != 'true'
-        run: echo "No E2E-relevant changes detected; required check passes without running Playwright."
+      - name: Report no standard groups selected
+        if: matrix.group == 'none'
+        run: echo "No standard Playwright group selected; see the selection job for the auditable reason."
 
-      - name: Checkout repository
-        if: needs.changes.outputs.e2e_relevant == 'true'
+      - name: Checkout exact PR target
+        if: matrix.group != 'none' && github.event_name == 'pull_request'
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: matrix.group != 'none' && github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Setup Node.js
-        if: needs.changes.outputs.e2e_relevant == 'true'
+        if: matrix.group != 'none'
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: npm
           cache-dependency-path: |
             shared/package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
 
-      - name: Install shared dependencies
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: shared
-        run: npm ci
+      - name: Install shared dependencies and build contracts
+        if: matrix.group != 'none'
+        run: npm ci --prefix shared && npm run build --prefix shared
 
-      - name: Build shared core
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: shared
-        run: npm run build
+      - name: Install backend and frontend dependencies
+        if: matrix.group != 'none'
+        run: npm ci --prefix backend && npm ci --prefix frontend
 
-      - name: Install backend dependencies
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: backend
-        run: npm ci
-
-      - name: Install frontend dependencies
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install Playwright browsers
-        if: needs.changes.outputs.e2e_relevant == 'true'
+      - name: Install Playwright Chromium
+        if: matrix.group != 'none'
         working-directory: frontend
         run: npx playwright install chromium
 
-      - name: Run Chromium E2E core shard
-        if: needs.changes.outputs.e2e_relevant == 'true'
+      - name: Run selected Playwright group
+        if: matrix.group != 'none'
         working-directory: frontend
-        run: npm run ${{ matrix.script }}
+        run: node ../.github/scripts/run-e2e-group.mjs
         env:
-          CI: true
-          PLAYWRIGHT_WORKERS: 1
-          PLAYWRIGHT_HTML_OPEN: never
-          JWT_SECRET: e2e-test-secret-that-is-long-enough
-          SESSION_SECRET: e2e-test-session-secret-long-enough
+          E2E_GROUP: ${{ matrix.group }}
 
       - name: Upload Playwright report
-        if: always() && needs.changes.outputs.e2e_relevant == 'true'
+        if: always() && matrix.group != 'none'
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-${{ matrix.id }}-report
+          name: playwright-${{ matrix.group }}-report
           path: frontend/playwright-report/
+          if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload test results
-        if: always() && needs.changes.outputs.e2e_relevant == 'true'
+      - name: Upload Playwright results
+        if: always() && matrix.group != 'none'
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-${{ matrix.id }}-results
+          name: playwright-${{ matrix.group }}-results
           path: frontend/test-results/
+          if-no-files-found: ignore
           retention-days: 7
 
-  e2e-data:
-    name: Playwright E2E data
-    needs: changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-
-    steps:
-      - name: Skip data E2E when change is not release/e2e-relevant
-        if: needs.changes.outputs.e2e_relevant != 'true'
-        run: echo "No E2E-relevant changes detected; required check passes without running Playwright data tests."
-
-      - name: Checkout repository
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: |
-            shared/package-lock.json
-            backend/package-lock.json
-            frontend/package-lock.json
-
-      - name: Install shared dependencies
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: shared
-        run: npm ci
-
-      - name: Build shared core
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: shared
-        run: npm run build
-
-      - name: Install backend dependencies
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: backend
-        run: npm ci
-
-      - name: Install frontend dependencies
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install Playwright browsers
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: frontend
-        run: npx playwright install chromium
-
-      - name: Run data-focused Chromium E2E tests
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        working-directory: frontend
-        run: npm run test:e2e:ci:data
-        env:
-          CI: true
-          PLAYWRIGHT_WORKERS: 1
-          PLAYWRIGHT_HTML_OPEN: never
-          JWT_SECRET: e2e-test-secret-that-is-long-enough
-          SESSION_SECRET: e2e-test-session-secret-long-enough
-
-      - name: Upload Playwright data report
-        if: always() && needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-data-report
-          path: frontend/playwright-report/
-          retention-days: 7
-
-      - name: Upload data test results
-        if: always() && needs.changes.outputs.e2e_relevant == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-data-results
-          path: frontend/test-results/
-          retention-days: 7
-
-  e2e-ui:
-    name: Playwright E2E medication UI
-    needs: changes
+  playwright-ui:
+    name: Playwright E2E editor UI
+    needs: selection
+    if: needs.selection.result == 'success' && needs.selection.outputs.ui_selected == 'true'
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble
@@ -203,34 +168,38 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-
     steps:
-      - name: Checkout repository
-        if: needs.changes.outputs.e2e_relevant == 'true'
+      - name: Checkout exact PR target
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Setup Node.js
-        if: needs.changes.outputs.e2e_relevant == 'true'
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: npm
           cache-dependency-path: |
             shared/package-lock.json
             backend/package-lock.json
             frontend/package-lock.json
 
       - name: Install shared dependencies and build contracts
-        if: needs.changes.outputs.e2e_relevant == 'true'
         run: npm ci --prefix shared && npm run build --prefix shared
 
       - name: Install backend and frontend dependencies
-        if: needs.changes.outputs.e2e_relevant == 'true'
         run: npm ci --prefix backend && npm ci --prefix frontend
 
       - name: Run medication UI functional and accessibility checks
-        if: needs.changes.outputs.e2e_relevant == 'true'
-        run: npm run test:e2e:ci:ui --prefix frontend
+        working-directory: frontend
+        run: node ../.github/scripts/run-e2e-group.mjs
         env:
           CI: true
           PLAYWRIGHT_HTML_OPEN: never
@@ -239,9 +208,10 @@ jobs:
           PLAYWRIGHT_DATA_DIR: /tmp/medassist-ui-e2e-data
           PLAYWRIGHT_OUTPUT_DIR: test-results/ui-e2e
           PLAYWRIGHT_UI_TESTS: true
+          E2E_GROUP: ui
 
       - name: Upload sanitized medication UI failure evidence
-        if: always() && needs.changes.outputs.e2e_relevant == 'true'
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: medication-ui-failure-evidence
@@ -252,3 +222,34 @@ jobs:
             frontend/test-results/ui-e2e/*/attachments/ui-safe-diagnostics-*.json
           if-no-files-found: ignore
           retention-days: 7
+
+  e2e-summary:
+    name: Playwright E2E Result
+    if: always()
+    needs: [selection, playwright-standard, playwright-ui]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact PR target
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Preserve aggregate result and report selection
+        env:
+          SELECTION_RESULT: ${{ needs.selection.result }}
+          STANDARD_RESULT: ${{ needs.playwright-standard.result }}
+          UI_RESULT: ${{ needs.playwright-ui.result }}
+          GROUPS: ${{ needs.selection.outputs.groups }}
+          UI_SELECTED: ${{ needs.selection.outputs.ui_selected }}
+          REASON: ${{ needs.selection.outputs.reason }}
+          TARGET_SHA: ${{ needs.selection.outputs.target_sha }}
+        run: node .github/scripts/validate-e2e-result.mjs

@@ -421,8 +421,28 @@ function validateDomainSafetyGate(rootPackage, backendPackage, frontendPackage) 
   );
   requireTextPattern(
     ".github/workflows/e2e.yml",
-    /matrix:\s*\n\s*include:\s*\n\s*-\s*id:\s*core-a\s*\n\s*script:\s*test:e2e:ci:core:a\s*\n\s*-\s*id:\s*core-b\s*\n\s*script:\s*test:e2e:ci:core:b[\s\S]*run:\s*npm run \$\{\{ matrix\.script \}\}/,
-    "run the approved core-a and core-b Chromium E2E matrix"
+    /matrix:\s*\n\s*group:\s*\$\{\{\s*fromJSON\(needs\.selection\.outputs\.matrix_groups[\s\S]*?run:\s*node \.\.\/\.github\/scripts\/run-e2e-group\.mjs/,
+    "run the inventory-selected Chromium E2E groups"
+  );
+  requireTextPattern(
+    ".github/workflows/e2e.yml",
+    /PLAYWRIGHT_WORKERS:\s*1/,
+    "run browser groups with one worker"
+  );
+  requireTextPattern(
+    ".github/scripts/select-e2e.mjs",
+    /export const GROUPS = \[[\s\S]*?"core-a",\s*"core-b"[\s\S]*const PLAYWRIGHT_PROJECTS = \{[\s\S]*?"core-a":\s*"chromium"[\s\S]*"core-b":\s*"chromium"/,
+    "keep both approved core Chromium groups in the selector"
+  );
+  requireTextPattern(
+    ".github/scripts/select-e2e.mjs",
+    /"core-b":\s*\[[^\]]*"domain-safety\.spec\.ts"/,
+    "assign the frontend domain safety E2E to core-b"
+  );
+  requireTextPattern(
+    ".github/workflows/e2e.yml",
+    /github\.event_name == 'workflow_dispatch' && github\.ref != 'refs\/heads\/main'/,
+    "restrict manual E2E selections to the trusted default branch"
   );
   requireScriptPattern(
     "frontend/package.json",

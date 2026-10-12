@@ -96,6 +96,43 @@ The Chromium core project retains a trace on failure even with zero retries.
 Traces can contain disposable test credentials and request data; treat them as
 sensitive debugging artifacts, not sanitized logs.
 
+## Playwright CI Selection
+
+The PR test workflow triggers for every changed path so an unknown root-level
+file cannot bypass the E2E selector. Existing backend/frontend lint, type,
+unit, and build gates still use job-level path filters. After those gates pass,
+`.github/workflows/e2e.yml` selects groups from the complete PR diff
+(`base...head`), not just the latest commit. This is deterministic path scoping,
+not semantic risk inference; deleted and renamed paths are included.
+
+Examples: dashboard layout selects core-b plus planning data; changes to the
+shared data table select all groups because it is used across product screens.
+Medication backend changes select both core shards plus medication and planning
+data because CRUD behavior is exercised by dashboard/planner/export/sharing
+flows;
+planner/schedule changes select both core shards plus planning data; editor,
+modal-history, and editor-style changes select both core shards, medication
+data, and authenticated editor UI. Shared contracts, auth, schema,
+dependencies, build/workflow configuration, and unknown paths select all
+groups. Documentation-only changes select none, with an explicit aggregate
+skip.
+
+Groups are `core-a`, `core-b`, `medication-data`, `planning-data`, `ui`, and
+`performance`. `.github/scripts/select-e2e.mjs` owns the spec inventory, and the
+runner consumes that same list. Inventory tests reject missing/stale mappings;
+unknown paths select the full suite.
+Validate selector changes with:
+
+```bash
+node --test .github/scripts/select-e2e.test.mjs
+```
+
+Run `E2E Tests` manually from Actions by selecting the target ref (the summary
+prints its exact commit SHA) and `full` or a comma-separated group list. `full`
+includes every spec and performance. A complete scheduled run, including
+performance, runs weekly on Sunday at 03:23 UTC. Runtime savings have not yet
+been measured on GitHub.
+
 `npm --prefix frontend run test:e2e:all` owns its server URLs and runs Chromium core and data tests together, then runs Firefox and WebKit in separate Playwright processes. Each browser batch receives fresh backend data, an isolated authentication-state file, and temporary result output, so sensitive authentication route limits do not accumulate across browsers and existing report/results directories are not cleared. Successful runs remove their temporary workspace; failed runs print and retain its path for diagnostics. Use the direct Playwright CLI when targeting an externally managed server.
 
 ## Workspace MCP Servers
@@ -162,13 +199,13 @@ It does not upload trace archives, HTML reports, auth state, or database files.
 CI uses disposable test credentials and fictional records. The medication UI
 suite runs only through its dedicated `chromium-ui` project; ordinary E2E,
 headed, and cross-browser runs exclude the UI spec. The UI job runs in the test
-workflow's reusable Playwright E2E path: relevant frontend/backend changes run
-it after the existing backend-test and frontend-build gates succeed. Its
-failure fails the reusable Playwright E2E result and legacy `Playwright E2E`
-commit status. Frontend specs, fixtures, Playwright configuration, UI runner,
-and frontend lockfile changes are included by the frontend path filter. The
-release manager monitors the GitHub check; developers do not need to run shell
-commands to monitor CI.
+workflow's reusable Playwright E2E path: editor/modal/shared-style changes
+select it after the existing backend-test and frontend-build gates succeed.
+Its failure fails the reusable Playwright E2E result and legacy
+`Playwright E2E` commit status. Frontend specs, fixtures, Playwright
+configuration, UI runner, and frontend lockfile changes are included by the
+frontend path filter. The release manager monitors the GitHub check;
+developers do not need to run shell commands to monitor CI.
 
 The scoped axe audit checks the editor subtree, including its inputs, buttons,
 and tabs; it records exact existing rule/target findings, not full compliance.

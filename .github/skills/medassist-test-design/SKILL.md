@@ -21,6 +21,11 @@ product implementation beyond identifying the repair owner.
   `frontend/e2e/**`.
 - Place coverage beside existing domain patterns and use established fixtures,
   helpers, selectors, and app bootstraps.
+- When adding or renaming a Playwright spec, assign it to
+  `.github/scripts/select-e2e.mjs` and run
+  `node --test .github/scripts/select-e2e.test.mjs`; the inventory guard must
+  keep every spec in a CI group. Selection is coarse and deterministic, with
+  unknown product paths falling back to the full suite.
 - Define deterministic regression criteria that fail against the real defect and
   assert observable behavior rather than implementation details.
 - Use Playwright when browser routing, auth/session, responsive interaction, or

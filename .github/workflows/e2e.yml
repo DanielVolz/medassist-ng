@@ -39,10 +39,24 @@ jobs:
       reason: ${{ steps.select.outputs.reason }}
       target_sha: ${{ steps.select.outputs.target_sha }}
     steps:
-      - name: Checkout exact PR or selected workflow ref
+      - name: Require manual selection from the default branch
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run the manual E2E workflow from the default branch (main)."
+          exit 1
+
+      - name: Checkout exact PR merge commit
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
           fetch-depth: 0
 
       - name: Select deterministic browser groups
@@ -82,11 +96,17 @@ jobs:
         if: matrix.group == 'none'
         run: echo "No standard Playwright group selected; see the selection job for the auditable reason."
 
-      - name: Checkout selected target
-        if: matrix.group != 'none'
+      - name: Checkout exact PR target
+        if: matrix.group != 'none' && github.event_name == 'pull_request'
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.selection.outputs.target_sha }}
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: matrix.group != 'none' && github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Setup Node.js
         if: matrix.group != 'none'
@@ -149,10 +169,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout selected target
+      - name: Checkout exact PR target
+        if: github.event_name == 'pull_request'
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.selection.outputs.target_sha }}
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -204,6 +231,18 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout exact PR target
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Checkout trusted default branch for scheduled and manual runs
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
       - name: Preserve aggregate result and report selection
         env:
           SELECTION_RESULT: ${{ needs.selection.result }}

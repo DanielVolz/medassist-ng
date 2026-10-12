@@ -60,6 +60,7 @@ test("workflow source connects default PR selection to the selected runner and a
 	assert.match(e2eWorkflow, /workflow_dispatch:[\s\S]*?default: full/);
 	assert.match(e2eWorkflow, /schedule:\n\s+- cron:/);
 	assert.match(e2eWorkflow, /selection_mode:[\s\S]*?default: pull_request/);
+	assert.match(e2eWorkflow, /Require manual selection from the default branch[\s\S]*?github\.ref != 'refs\/heads\/main'/);
 	assert.match(e2eWorkflow, /fetch-depth: 0/);
 	assert.match(e2eWorkflow, /run: node \.github\/scripts\/select-e2e\.mjs/);
 	assert.match(e2eWorkflow, /BASE_SHA: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
@@ -68,11 +69,13 @@ test("workflow source connects default PR selection to the selected runner and a
 	assert.match(e2eWorkflow, /matrix_groups: \$\{\{ steps\.select\.outputs\.matrix_groups \}\}/);
 	assert.match(e2eWorkflow, /group: \$\{\{ fromJSON\(needs\.selection\.outputs\.matrix_groups \|\| '\["none"\]'\) \}\}/);
 	assert.equal([...e2eWorkflow.matchAll(/ref: \$\{\{ needs\.selection\.outputs\.target_sha \}\}/g)].length, 2);
+	assert.ok([...e2eWorkflow.matchAll(/ref: main/g)].length >= 4);
 	assert.match(e2eWorkflow, /E2E_GROUP: \$\{\{ matrix\.group \}\}/);
 	assert.match(e2eWorkflow, /run: node \.\.\/\.github\/scripts\/run-e2e-group\.mjs/);
 	assert.match(e2eWorkflow, /needs\.selection\.outputs\.ui_selected == 'true'/);
 	assert.match(e2eWorkflow, /needs: \[selection, playwright-standard, playwright-ui\]/);
 	assert.match(e2eWorkflow, /if: always\(\)/);
+	assert.match(e2eWorkflow, /e2e-summary:[\s\S]*?actions\/checkout@v7[\s\S]*?run: node \.github\/scripts\/validate-e2e-result\.mjs/);
 	assert.match(e2eWorkflow, /run: node \.github\/scripts\/validate-e2e-result\.mjs/);
 	assert.match(testWorkflow, /Publish legacy Playwright E2E status/);
 	assert.match(testWorkflow, /context: 'Playwright E2E'/);

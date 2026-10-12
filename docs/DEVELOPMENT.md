@@ -127,11 +127,12 @@ Validate selector changes with:
 node --test .github/scripts/select-e2e.test.mjs
 ```
 
-Run `E2E Tests` manually from Actions by selecting the target ref (the summary
-prints its exact commit SHA) and `full` or a comma-separated group list. `full`
-includes every spec and performance. A complete scheduled run, including
-performance, runs weekly on Sunday at 03:23 UTC. Runtime savings have not yet
-been measured on GitHub.
+Run `E2E Tests` manually from Actions on `main` and choose `full` or a
+comma-separated group list. Manual and scheduled runs check out the trusted
+default branch; pull-request runs check out the exact PR commit. The summary
+prints the target SHA and selected groups. `full` includes every spec and
+performance. A complete scheduled run, including performance, runs weekly on
+Sunday at 03:23 UTC. Runtime savings have not yet been measured on GitHub.
 
 `npm --prefix frontend run test:e2e:all` owns its server URLs and runs Chromium core and data tests together, then runs Firefox and WebKit in separate Playwright processes. Each browser batch receives fresh backend data, an isolated authentication-state file, and temporary result output, so sensitive authentication route limits do not accumulate across browsers and existing report/results directories are not cleared. Successful runs remove their temporary workspace; failed runs print and retain its path for diagnostics. Use the direct Playwright CLI when targeting an externally managed server.
 

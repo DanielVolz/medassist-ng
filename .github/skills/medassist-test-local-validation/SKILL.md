@@ -30,7 +30,8 @@ Do not design or change tests, and do not inspect or triage GitHub CI failures.
   timing. For an applicable change, run this through `testing-manager` before
   handoff; report the exact command/result or an explicit blocker.
 - Run `npm --prefix frontend run test:e2e:ui:docker` for the canonical functional
-  and accessibility suite; the runner pins Playwright 1.63.0 and Linux AMD64.
+  and accessibility suite; its Linux AMD64 image must match the exact
+  `@playwright/test` version in `frontend/package.json`.
   Pixel comparisons and screenshot baselines are not CI gates.
 - The default is one shard/worker. `--shards=2` isolates containers, auth,
   databases, shared build output, results, and reports; it is opt-in because

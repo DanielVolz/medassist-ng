@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const image = "mcr.microsoft.com/playwright:v1.63.0-noble";
+const image = "mcr.microsoft.com/playwright:v1.64.0-noble";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const usage =
 	"Usage: npm run test:e2e:ui:docker -- [--shards=N] [--repeat-each=N] [--no-cache]";

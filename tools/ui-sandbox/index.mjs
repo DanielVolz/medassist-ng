@@ -1,17 +1,22 @@
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { demoMedications } from "./seed.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sandboxDir = resolve(root, ".ui-dev");
 const dataDir = resolve(sandboxDir, "data");
+const assetsDir = resolve(root, "tools/ui-sandbox/assets");
 const lockPath = resolve(sandboxDir, "launcher.lock");
 const seedMarker = resolve(sandboxDir, "seed-complete.json");
 const backendPort = 5177;
 const frontendPort = 5176;
 const backendUrl = `http://127.0.0.1:${backendPort}`;
 const appUrl = `http://127.0.0.1:${frontendPort}/dashboard`;
+const requireBackend = createRequire(resolve(root, "backend/package.json"));
+const sharp = requireBackend("sharp");
 const children = new Set();
 let lockFd;
 let stopping = false;
@@ -121,85 +126,6 @@ async function waitForUrl(url, label) {
 	return response;
 }
 
-const startDate = new Date(Date.now() - 86_400_000).toISOString();
-const regularIntake = (usage, takenBy) => ({
-	usage,
-	every: 1,
-	start: startDate,
-	takenBy,
-	intakeRemindersEnabled: false,
-});
-
-const demoMedications = [
-	{
-		name: "Pocket Sunshine for Indoor Goblins",
-		genericName: "Cholecalciferol",
-		takenBy: ["Sir Snoozes-a-Lot"],
-		medicationForm: "capsule",
-		pillForm: "capsule",
-		packageType: "blister",
-		packCount: 1,
-		blistersPerPack: 2,
-		pillsPerBlister: 14,
-		looseTablets: 22,
-		doseUnit: "IU",
-		intakes: [regularIntake(1, "Sir Snoozes-a-Lot")],
-	},
-	{
-		name: "Sneezus Interruptus Deluxe",
-		genericName: "Cetirizine",
-		takenBy: ["Sir Snoozes-a-Lot", "Professor Wobble McNoodle"],
-		medicationForm: "tablet",
-		pillForm: "tablet",
-		packageType: "blister",
-		packCount: 1,
-		blistersPerPack: 1,
-		pillsPerBlister: 10,
-		looseTablets: 3,
-		doseUnit: "mg",
-		intakes: [regularIntake(1, "Professor Wobble McNoodle")],
-	},
-	{
-		name: "Cough Goblin Eviction Juice",
-		genericName: "Dextromethorphan",
-		takenBy: ["Professor Wobble McNoodle"],
-		medicationForm: "liquid",
-		packageType: "liquid_container",
-		packCount: 1,
-		packageAmountValue: 120,
-		packageAmountUnit: "ml",
-		totalPills: 120,
-		looseTablets: 18,
-		doseUnit: "ml",
-		intakes: [regularIntake(5, "Professor Wobble McNoodle")],
-	},
-	{
-		name: "Itch Please! Emergency Goblin Butter",
-		genericName: "Moisturizing cream",
-		takenBy: ["Sir Snoozes-a-Lot"],
-		medicationForm: "topical",
-		packageType: "tube",
-		packCount: 1,
-		packageAmountValue: 30,
-		packageAmountUnit: "g",
-		doseUnit: "g",
-		intakes: [regularIntake(1, "Sir Snoozes-a-Lot")],
-	},
-	{
-		name: "Brain Gremlin Eviction Notice",
-		genericName: "Ibuprofen",
-		takenBy: ["Sir Snoozes-a-Lot"],
-		medicationForm: "tablet",
-		pillForm: "tablet",
-		packageType: "bottle",
-		packCount: 1,
-		totalPills: 24,
-		looseTablets: 24,
-		doseUnit: "mg",
-		intakes: [],
-	},
-];
-
 async function requestJson(url, options) {
 	assertRunning();
 	const response = await fetch(url, options);
@@ -214,6 +140,20 @@ async function requestJson(url, options) {
 		fail(`Sandbox API ${url} returned HTTP ${response.status}; refusing to report a ready app.`);
 	}
 	return body;
+}
+
+async function uploadDemoImage(medicationId, imageAsset) {
+	const svg = readFileSync(resolve(assetsDir, imageAsset));
+	const png = await sharp(svg).png().toBuffer();
+	const formData = new FormData();
+	formData.append("file", new Blob([png], { type: "image/png" }), imageAsset.replace(/\.svg$/, ".png"));
+	const response = await fetch(`${backendUrl}/medications/${medicationId}/image`, {
+		method: "POST",
+		body: formData,
+	});
+	if (!response.ok) {
+		fail(`Sandbox image upload for seeded medication ${medicationId} returned HTTP ${response.status}.`);
+	}
 }
 
 async function initializeSandboxData() {
@@ -234,18 +174,33 @@ async function initializeSandboxData() {
 		);
 	}
 
-	for (const medication of demoMedications) {
-		await requestJson(`${backendUrl}/medications`, {
+	for (const { medication, imageAsset } of demoMedications) {
+		const created = await requestJson(`${backendUrl}/medications`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(medication),
 		});
+		await uploadDemoImage(created.id, imageAsset);
 	}
 
 	const seeded = await requestJson(`${backendUrl}/medications`);
 	const seededNames = new Set(seeded.map((medication) => medication.name));
-	if (demoMedications.some((medication) => !seededNames.has(medication.name))) {
+	if (demoMedications.some(({ medication }) => !seededNames.has(medication.name))) {
 		fail("Sandbox seed verification failed. The database may contain a partial seed; it was left untouched.");
+	}
+	if (demoMedications.some(({ medication }) => !seeded.some((item) => item.name === medication.name && item.imageUrl))) {
+		fail("Sandbox image verification failed. The seed marker was not written.");
+	}
+	for (const { medication } of demoMedications) {
+		const seededMedication = seeded.find((item) => item.name === medication.name);
+		const imageResponse = await fetch(`${backendUrl}/images/${seededMedication.imageUrl}`);
+		if (!imageResponse.ok || !imageResponse.headers.get("content-type")?.startsWith("image/")) {
+			fail(`Sandbox image verification failed for ${medication.name}. The seed marker was not written.`);
+		}
+		const image = await imageResponse.arrayBuffer();
+		if (image.byteLength === 0) {
+			fail(`Sandbox image for ${medication.name} is empty. The seed marker was not written.`);
+		}
 	}
 
 	const temporaryMarker = `${seedMarker}.${process.pid}.tmp`;

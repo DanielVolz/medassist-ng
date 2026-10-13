@@ -7,8 +7,8 @@ import { test } from "node:test";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const launcher = resolve(root, "scripts/dev-ui.mjs");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const launcher = resolve(root, "tools/ui-sandbox/index.mjs");
 
 function listen(port) {
 	return new Promise((resolveListen, reject) => {

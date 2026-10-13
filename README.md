@@ -43,13 +43,15 @@
 The interface and notifications are available in English, German, Portuguese (Portugal), and Spanish. Select a language in Settings.
 
 <p align="center">
-  <img src="docs/gifs/MedAssist-demo.gif" alt="MedAssist-ng Dashboard" width="100%" />
+  <img src="docs/gifs/MedAssist-demo.gif" alt="Animated MedAssist-ng demo: dashboard, medications, planner, settings, and a Light Mode finale" width="100%" />
 </p>
 
 <a id="screenshots"></a>
 <details>
 <summary><strong>Screenshots</strong></summary>
 <blockquote>
+
+Captured from the local UI sandbox using fictitious people, medications, and bundled illustrations.
 
 <details>
 <summary>Dashboard</summary>

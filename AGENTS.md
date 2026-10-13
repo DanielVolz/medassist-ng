@@ -121,6 +121,7 @@ The release manager may and should use the authenticated `gh` CLI when available
 
 - For general frontend layout, styling, and interaction work, use `npm run dev:ui` from the repository root and open `http://127.0.0.1:5176/dashboard`. See `docs/DEVELOPMENT.md` for the setup procedure.
 - This starts a loopback-only frontend (5176) and backend (5177), automatically seeds fictitious medication/person data on first startup, and uses the existing anonymous identity without registration or login.
+- First-run fixtures are defined in `tools/ui-sandbox/seed.mjs`; bundled original CC0 illustrations live in `tools/ui-sandbox/assets/` and are stored locally through the sandbox API. Keep fixture stock within package capacity and verify image availability plus the app's calculated stock status.
 - Data lives in ignored `.ui-dev/data/`, persists across restarts, and must remain separate from real `data/` and repository `.env` settings. Do not reset demo edits or delete a launcher lock without checking its owning process.
 - Check whether the sandbox is already running before starting it. A busy port is not proof that the service is the sandbox; never seed or modify an unidentified instance.
 - Implementation, review, and testing agents should inspect the affected rendered state before changing UI and verify it afterward. Obtain browser evidence directly rather than routinely asking the user for screenshots.

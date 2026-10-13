@@ -39,6 +39,32 @@ before starting another copy. If startup reports an existing launcher lock
 after a crash, first confirm no sandbox process is running; only then remove
 the stale `.ui-dev/launcher.lock`.
 
+Sandbox tooling lives in `tools/ui-sandbox/`: `index.mjs` is the launcher,
+`seed.mjs` defines the first-run fixtures, and `assets/` contains the bundled
+original CC0 medication illustrations. Every seeded medication receives an
+illustration, and seeded stock stays within package capacity with enough supply
+that no medication starts as critical or empty. Verify fixture changes with:
+
+```bash
+npm --prefix frontend exec vitest run src/test/dev-ui-seed.test.ts
+npm run test:dev-ui
+```
+
+`npm run test:dev-ui` needs free ports 5176 and 5177, so stop a running sandbox
+first.
+
+### README Demo Media
+
+README screenshots in `docs/screenshots/` and the auto-playing demo
+`docs/gifs/MedAssist-demo.gif` are captured from the UI sandbox, never from real
+data. Record read-only browser sessions only: do not submit forms or change
+data. GitHub does not autoplay repository videos in a README, so convert the
+recording to a looping GIF, for example:
+
+```bash
+ffmpeg -i demo.webm -filter_complex '[0:v]fps=20,scale=800:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle' -loop 0 docs/gifs/MedAssist-demo.gif
+```
+
 If you changed `docker-compose.dev.yml`, added new bind mounts, or introduced a new local package like `shared/`, do not rely on `docker compose restart` alone. Restarting reuses the old containers and does not apply mount changes. Recreate the development services instead:
 
 ```bash

@@ -195,7 +195,7 @@ test("shared contracts, authentication, schema, locks, workflows, and unknown pr
 		"frontend/package-lock.json",
 		".github/workflows/test.yml",
 		".github/workflows/e2e.yml",
-		"scripts/dev-ui.mjs",
+		"tools/ui-sandbox/index.mjs",
 		"backend/src/services/unclassified-service.ts",
 		"package-lock.json",
 		"knip.jsonc",

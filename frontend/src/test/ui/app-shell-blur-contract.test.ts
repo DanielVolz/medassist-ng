@@ -51,8 +51,16 @@ describe("app shell header blur contract", () => {
 		expect(headerBlur).toMatch(
 			/background\s*:\s*color-mix\(in srgb, var\(--mantine-other-bg-secondary\) 82%, transparent\)/
 		);
-		expect(headerBlur).toMatch(/backdrop-filter\s*:\s*blur\(24px\) saturate\(1\.05\)/);
+		expect(headerBlur).toMatch(/(?:^|[;\n])\s*backdrop-filter\s*:\s*blur\(24px\) saturate\(1\.05\)/);
 		expect(headerBlur).toMatch(/-webkit-backdrop-filter\s*:\s*blur\(24px\) saturate\(1\.05\)/);
+	});
+
+	it("keeps the standard blur after the prefix so production minification preserves it", () => {
+		const headerBlur = blockFor(readSource("components/AppHeader.module.css"), ".header::before");
+
+		expect(headerBlur).toMatch(
+			/-webkit-backdrop-filter\s*:\s*blur\(24px\) saturate\(1\.05\);[\s\S]*[;\n]\s*backdrop-filter\s*:\s*blur\(24px\) saturate\(1\.05\)/
+		);
 	});
 
 	it("keeps the mobile sticky boundary inside the header", () => {

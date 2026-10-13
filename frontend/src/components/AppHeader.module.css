@@ -28,8 +28,9 @@
 	z-index: -1;
 	border-radius: inherit;
 	background: color-mix(in srgb, var(--mantine-other-bg-secondary) 82%, transparent);
-	backdrop-filter: blur(24px) saturate(1.05);
+	/* Keep the standard declaration last: Lightning CSS merges these during production minification. */
 	-webkit-backdrop-filter: blur(24px) saturate(1.05);
+	backdrop-filter: blur(24px) saturate(1.05);
 }
 
 :global([data-theme="light"]) .header::before {

@@ -36,7 +36,7 @@ export function Lightbox({ src, alt, onClose }: LightboxProps) {
 			ref={focusTrapRef}
 			role="dialog"
 			aria-modal="true"
-			aria-label={alt || t("lightbox.title")}
+			aria-label={alt}
 			className={classes.overlay}
 			onClick={handleOverlayClick}
 			onKeyDown={(e) => {

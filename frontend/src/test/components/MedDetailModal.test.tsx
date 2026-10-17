@@ -780,7 +780,7 @@ describe("MedDetailModal with refill history", () => {
 			/>
 		);
 
-		fireEvent.click(screen.getByRole("heading", { name: /refill\.history \(1\)/i }));
+		fireEvent.click(screen.getByRole("button", { name: /refill\.history \(1\)/i }));
 
 		expect(onRefillHistoryExpandedChange).toHaveBeenCalledWith(true);
 	});

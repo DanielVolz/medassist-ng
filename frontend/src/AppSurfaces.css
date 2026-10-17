@@ -530,6 +530,14 @@ textarea {
 	min-height: 60px;
 }
 
+/* Placeholder contrast: override browser default opacity (Firefox 0.54) and
+   pin to the theme secondary color to satisfy WCAG AA (>= 4.5:1). */
+input::placeholder,
+textarea::placeholder {
+	color: var(--text-secondary);
+	opacity: 1;
+}
+
 /* Override browser autofill yellow/orange highlight */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,

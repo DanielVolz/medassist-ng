@@ -1690,9 +1690,13 @@ export function MedicationsPage() {
 									onBlur={() => setShowNameValidation(true)}
 									placeholder={t("form.placeholders.commercial")}
 									maxLength={MEDICATION_FORM_FIELD_LIMITS.name.max}
+									aria-invalid={!readOnlyView && showNameValidation && fieldErrors.name ? true : undefined}
+									aria-describedby={!readOnlyView && showNameValidation && fieldErrors.name ? "name-error" : undefined}
 								/>
 								{!readOnlyView && showNameValidation && fieldErrors.name && (
-									<span className="field-error">{fieldErrors.name}</span>
+									<span id="name-error" className="field-error" role="alert">
+										{fieldErrors.name}
+									</span>
 								)}
 							</label>
 							<label className={!readOnlyView && showNameValidation && fieldErrors.genericName ? "has-error" : ""}>
@@ -1706,9 +1710,15 @@ export function MedicationsPage() {
 									onBlur={() => setShowNameValidation(true)}
 									placeholder={t("form.placeholders.generic")}
 									maxLength={MEDICATION_FORM_FIELD_LIMITS.genericName.max}
+									aria-invalid={!readOnlyView && showNameValidation && fieldErrors.genericName ? true : undefined}
+									aria-describedby={
+										!readOnlyView && showNameValidation && fieldErrors.genericName ? "generic-name-error" : undefined
+									}
 								/>
 								{!readOnlyView && showNameValidation && fieldErrors.genericName && (
-									<span className="field-error">{fieldErrors.genericName}</span>
+									<span id="generic-name-error" className="field-error" role="alert">
+										{fieldErrors.genericName}
+									</span>
 								)}
 							</label>
 							<MedicationEnrichmentSection
@@ -1727,8 +1737,14 @@ export function MedicationsPage() {
 										value={form.medicationStartDate}
 										onChange={(e) => handleValueChange("medicationStartDate", e.target.value)}
 										placeholder={t("common.optional")}
+										aria-invalid={!readOnlyView && dateConsistencyError ? true : undefined}
+										aria-describedby={!readOnlyView && dateConsistencyError ? "date-error" : undefined}
 									/>
-									{!readOnlyView && dateConsistencyError && <span className="field-error">{dateConsistencyError}</span>}
+									{!readOnlyView && dateConsistencyError && (
+										<span id="date-error" className="field-error" role="alert">
+											{dateConsistencyError}
+										</span>
+									)}
 								</label>
 								<label className="date-pair-field">
 									{t("form.medicationEndDate")}
@@ -1830,6 +1846,8 @@ export function MedicationsPage() {
 												}
 												maxLength={MEDICATION_FORM_FIELD_LIMITS.takenBy.max}
 												list="takenby-suggestions"
+												aria-invalid={fieldErrors.takenBy ? true : undefined}
+												aria-describedby={fieldErrors.takenBy ? "taken-by-error" : undefined}
 											/>
 											<datalist id="takenby-suggestions">
 												{existingPeople
@@ -1841,7 +1859,11 @@ export function MedicationsPage() {
 										</>
 									)}
 								</div>
-								{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
+								{fieldErrors.takenBy && (
+									<span id="taken-by-error" className="field-error" role="alert">
+										{fieldErrors.takenBy}
+									</span>
+								)}
 							</label>
 						</div>
 
@@ -2128,6 +2150,8 @@ export function MedicationsPage() {
 									rows={2}
 									maxLength={MEDICATION_FORM_FIELD_LIMITS.notes.max}
 									className="auto-resize"
+									aria-invalid={fieldErrors.notes ? true : undefined}
+									aria-describedby={fieldErrors.notes ? "notes-error" : undefined}
 									onInput={(e) => {
 										const t = e.target as HTMLTextAreaElement;
 										t.style.height = "auto";
@@ -2144,7 +2168,11 @@ export function MedicationsPage() {
 										})}
 									</span>
 								)}
-								{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
+								{fieldErrors.notes && (
+									<span id="notes-error" className="field-error" role="alert">
+										{fieldErrors.notes}
+									</span>
+								)}
 							</label>
 						</div>
 					</div>

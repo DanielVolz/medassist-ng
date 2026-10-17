@@ -564,9 +564,15 @@ export function MobileEditModal({
 												onBlur={() => setShowNameValidation(true)}
 												placeholder={t("form.placeholders.commercial")}
 												maxLength={MEDICATION_FORM_FIELD_LIMITS.name.max}
+												aria-invalid={!readOnlyMode && showNameValidation && fieldErrors.name ? true : undefined}
+												aria-describedby={
+													!readOnlyMode && showNameValidation && fieldErrors.name ? "mobile-name-error" : undefined
+												}
 											/>
 											{!readOnlyMode && showNameValidation && fieldErrors.name && (
-												<span className="field-error">{fieldErrors.name}</span>
+												<span id="mobile-name-error" className="field-error" role="alert">
+													{fieldErrors.name}
+												</span>
 											)}
 										</label>
 										<label
@@ -582,9 +588,17 @@ export function MobileEditModal({
 												onBlur={() => setShowNameValidation(true)}
 												placeholder={t("form.placeholders.generic")}
 												maxLength={MEDICATION_FORM_FIELD_LIMITS.genericName.max}
+												aria-invalid={!readOnlyMode && showNameValidation && fieldErrors.genericName ? true : undefined}
+												aria-describedby={
+													!readOnlyMode && showNameValidation && fieldErrors.genericName
+														? "mobile-generic-name-error"
+														: undefined
+												}
 											/>
 											{!readOnlyMode && showNameValidation && fieldErrors.genericName && (
-												<span className="field-error">{fieldErrors.genericName}</span>
+												<span id="mobile-generic-name-error" className="field-error" role="alert">
+													{fieldErrors.genericName}
+												</span>
 											)}
 										</label>
 										<MedicationEnrichmentSection
@@ -603,9 +617,13 @@ export function MobileEditModal({
 													value={form.medicationStartDate}
 													onChange={(e) => onHandleValueChange("medicationStartDate", e.target.value)}
 													placeholder={t("common.optional")}
+													aria-invalid={!readOnlyMode && dateConsistencyError ? true : undefined}
+													aria-describedby={!readOnlyMode && dateConsistencyError ? "mobile-date-error" : undefined}
 												/>
 												{!readOnlyMode && dateConsistencyError && (
-													<span className="field-error">{dateConsistencyError}</span>
+													<span id="mobile-date-error" className="field-error" role="alert">
+														{dateConsistencyError}
+													</span>
 												)}
 											</label>
 											<label className="date-pair-field">
@@ -706,6 +724,8 @@ export function MobileEditModal({
 													}
 													maxLength={MEDICATION_FORM_FIELD_LIMITS.takenBy.max}
 													list="takenby-suggestions-modal"
+													aria-invalid={fieldErrors.takenBy ? true : undefined}
+													aria-describedby={fieldErrors.takenBy ? "mobile-taken-by-error" : undefined}
 												/>
 												<datalist id="takenby-suggestions-modal">
 													{existingPeople
@@ -715,7 +735,11 @@ export function MobileEditModal({
 														))}
 												</datalist>
 											</div>
-											{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
+											{fieldErrors.takenBy && (
+												<span id="mobile-taken-by-error" className="field-error" role="alert">
+													{fieldErrors.takenBy}
+												</span>
+											)}
 										</label>
 									</div>
 								</div>
@@ -976,6 +1000,8 @@ export function MobileEditModal({
 												rows={2}
 												maxLength={MEDICATION_FORM_FIELD_LIMITS.notes.max}
 												className="auto-resize"
+												aria-invalid={fieldErrors.notes ? true : undefined}
+												aria-describedby={fieldErrors.notes ? "mobile-notes-error" : undefined}
 												onInput={(e) => {
 													const target = e.target as HTMLTextAreaElement;
 													target.style.height = "auto";
@@ -992,7 +1018,11 @@ export function MobileEditModal({
 													})}
 												</span>
 											)}
-											{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
+											{fieldErrors.notes && (
+												<span id="mobile-notes-error" className="field-error" role="alert">
+													{fieldErrors.notes}
+												</span>
+											)}
 										</label>
 									</div>
 								</div>

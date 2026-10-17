@@ -33,7 +33,18 @@ export function DateInput({ value, placeholder, className, ...rest }: DateInputP
 	);
 }
 
-export function MonthInput({ value, onChange, placeholder, className, disabled, id, name, required }: DateInputProps) {
+export function MonthInput({
+	value,
+	onChange,
+	placeholder,
+	className,
+	disabled,
+	id,
+	name,
+	required,
+	"aria-invalid": ariaInvalid,
+	"aria-describedby": ariaDescribedBy,
+}: DateInputProps & { "aria-invalid"?: boolean; "aria-describedby"?: string }) {
 	const locale = getNumericLocale();
 	const monthValue = toMonthValue(value);
 
@@ -61,6 +72,8 @@ export function MonthInput({ value, onChange, placeholder, className, disabled, 
 			rightSectionPointerEvents="none"
 			popoverProps={{ withinPortal: true, zIndex: 2600 }}
 			className={["month-picker-wrapper", classes.monthPickerRoot, className].filter(Boolean).join(" ")}
+			aria-invalid={ariaInvalid}
+			aria-describedby={ariaDescribedBy}
 			classNames={{
 				input: ["month-picker-input", classes.monthPickerInput].join(" "),
 				section: classes.monthPickerSection,

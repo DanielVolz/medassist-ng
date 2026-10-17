@@ -298,6 +298,39 @@ export function MedicationsPage() {
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
 	const closeLightbox = useCallback(() => setLightboxImage(null), []);
 	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
+
+	// Tab keyboard navigation handler
+	const handleTabKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>, tabName: typeof activeTab) => {
+		const tabs: Array<typeof activeTab> = ["general", "stock", "schedule", "prescription"];
+		const currentIndex = tabs.indexOf(tabName);
+		let nextIndex: number | null = null;
+
+		if (e.key === "ArrowRight") {
+			e.preventDefault();
+			nextIndex = (currentIndex + 1) % tabs.length;
+		} else if (e.key === "ArrowLeft") {
+			e.preventDefault();
+			nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+		} else if (e.key === "Home") {
+			e.preventDefault();
+			nextIndex = 0;
+		} else if (e.key === "End") {
+			e.preventDefault();
+			nextIndex = tabs.length - 1;
+		}
+
+		if (nextIndex !== null) {
+			setActiveTab(tabs[nextIndex]);
+			// Focus the next tab button
+			setTimeout(() => {
+				const nextTabButton = document.querySelector(
+					`button[role="tab"][aria-controls="med-editor-panel-${tabs[nextIndex]}"]`
+				) as HTMLButtonElement;
+				nextTabButton?.focus();
+			}, 0);
+		}
+	}, []);
+
 	const [recordNowMedication, setRecordNowMedication] = useState<Medication | null>(null);
 	const canRecordNow = useCallback(
 		(medication: Medication) => {
@@ -1556,44 +1589,56 @@ export function MedicationsPage() {
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-general"
 							aria-selected={activeTab === "general"}
+							aria-controls="med-editor-panel-general"
 							className={[formClasses.tab, activeTab === "general" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("general")}
+							onKeyDown={(e) => handleTabKeyDown(e, "general")}
 						>
 							{t("form.sections.general")}
 						</button>
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-stock"
 							aria-selected={activeTab === "stock"}
+							aria-controls="med-editor-panel-stock"
 							className={[formClasses.tab, activeTab === "stock" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("stock")}
+							onKeyDown={(e) => handleTabKeyDown(e, "stock")}
 						>
 							{t("form.sections.stock")}
 						</button>
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-schedule"
 							aria-selected={activeTab === "schedule"}
+							aria-controls="med-editor-panel-schedule"
 							className={[formClasses.tab, activeTab === "schedule" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("schedule")}
+							onKeyDown={(e) => handleTabKeyDown(e, "schedule")}
 						>
 							{t("form.sections.schedule")}
 						</button>
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-prescription"
 							aria-selected={activeTab === "prescription"}
+							aria-controls="med-editor-panel-prescription"
 							className={[formClasses.tab, activeTab === "prescription" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("prescription")}
+							onKeyDown={(e) => handleTabKeyDown(e, "prescription")}
 						>
 							{t("form.sections.prescription")}
 						</button>
@@ -1618,6 +1663,10 @@ export function MedicationsPage() {
 			>
 				<fieldset className="readonly-fieldset" disabled={readOnlyView}>
 					<div
+						role="tabpanel"
+						id="med-editor-panel-general"
+						aria-labelledby="med-editor-tab-general"
+						hidden={activeTab !== "general"}
 						className={[formClasses.tabPanel, activeTab === "general" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}
@@ -1818,16 +1867,22 @@ export function MedicationsPage() {
 										);
 									}
 									return (
-										<input
-											type="file"
-											accept="image/jpeg,image/png,image/webp,image/gif"
-											onChange={(e) => {
-												const file = e.target.files?.[0];
-												e.target.value = "";
-												if (file) void tryUploadMedImage(editingId, file);
-											}}
-											disabled={uploadingImage}
-										/>
+										<>
+											<label htmlFor="med-image-upload-existing" className="visually-hidden">
+												{t("form.uploadImage")}
+											</label>
+											<input
+												id="med-image-upload-existing"
+												type="file"
+												accept="image/jpeg,image/png,image/webp,image/gif"
+												onChange={(e) => {
+													const file = e.target.files?.[0];
+													e.target.value = "";
+													if (file) void tryUploadMedImage(editingId, file);
+												}}
+												disabled={uploadingImage}
+											/>
+										</>
 									);
 								}
 								if (pendingImagePreview) {
@@ -1852,11 +1907,17 @@ export function MedicationsPage() {
 									);
 								}
 								return (
-									<input
-										type="file"
-										accept="image/jpeg,image/png,image/webp,image/gif"
-										onChange={handlePendingMedicationImageSelection}
-									/>
+									<>
+										<label htmlFor="med-image-upload-new" className="visually-hidden">
+											{t("form.uploadImage")}
+										</label>
+										<input
+											id="med-image-upload-new"
+											type="file"
+											accept="image/jpeg,image/png,image/webp,image/gif"
+											onChange={handlePendingMedicationImageSelection}
+										/>
+									</>
 								);
 							})()}
 							{imageUploadError && <span className="field-error">{imageUploadError}</span>}
@@ -1865,6 +1926,10 @@ export function MedicationsPage() {
 					{/* end general tab */}
 
 					<div
+						role="tabpanel"
+						id="med-editor-panel-stock"
+						aria-labelledby="med-editor-tab-stock"
+						hidden={activeTab !== "stock"}
 						className={[formClasses.tabPanel, activeTab === "stock" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}
@@ -2080,6 +2145,10 @@ export function MedicationsPage() {
 					{/* end stock tab */}
 
 					<div
+						role="tabpanel"
+						id="med-editor-panel-prescription"
+						aria-labelledby="med-editor-tab-prescription"
+						hidden={activeTab !== "prescription"}
 						className={[formClasses.tabPanel, activeTab === "prescription" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}
@@ -2139,6 +2208,10 @@ export function MedicationsPage() {
 					{/* end prescription tab */}
 
 					<div
+						role="tabpanel"
+						id="med-editor-panel-schedule"
+						aria-labelledby="med-editor-tab-schedule"
+						hidden={activeTab !== "schedule"}
 						className={[formClasses.tabPanel, activeTab === "schedule" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}

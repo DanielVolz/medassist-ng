@@ -5,6 +5,19 @@
 	medications, planner, and other multi-screen layout structures.
 	============================================================================= */
 
+/* Accessibility utility: Visually hidden but accessible to screen readers */
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}
+
 .med-name {
 	font-weight: 700;
 	font-size: 1.05rem;

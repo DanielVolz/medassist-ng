@@ -2,6 +2,7 @@
 // Lightbox Component - Full-screen image viewer
 // =============================================================================
 
+import { useFocusTrap } from "@mantine/hooks";
 import { X } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,6 +19,7 @@ export interface LightboxProps {
 
 export function Lightbox({ src, alt, onClose }: LightboxProps) {
 	const { t } = useTranslation();
+	const focusTrapRef = useFocusTrap(true);
 
 	useEscapeKey(true, onClose);
 	useScrollLock(true);
@@ -31,6 +33,10 @@ export function Lightbox({ src, alt, onClose }: LightboxProps) {
 
 	return (
 		<div
+			ref={focusTrapRef}
+			role="dialog"
+			aria-modal="true"
+			aria-label={alt || t("lightbox.title")}
 			className={classes.overlay}
 			onClick={handleOverlayClick}
 			onKeyDown={(e) => {

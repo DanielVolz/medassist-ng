@@ -200,6 +200,39 @@ export function MobileEditModal({
 	const decrementValueLabel = t("editStock.decreaseValue");
 	const incrementValueLabel = t("editStock.increaseValue");
 	const [activeTab, setActiveTab] = useState<MobileTab>("general");
+
+	// Tab keyboard navigation handler
+	const handleTabKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>, tabName: MobileTab) => {
+		const tabs = MOBILE_TAB_ORDER;
+		const currentIndex = tabs.indexOf(tabName);
+		let nextIndex: number | null = null;
+
+		if (e.key === "ArrowRight") {
+			e.preventDefault();
+			nextIndex = (currentIndex + 1) % tabs.length;
+		} else if (e.key === "ArrowLeft") {
+			e.preventDefault();
+			nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+		} else if (e.key === "Home") {
+			e.preventDefault();
+			nextIndex = 0;
+		} else if (e.key === "End") {
+			e.preventDefault();
+			nextIndex = tabs.length - 1;
+		}
+
+		if (nextIndex !== null) {
+			setActiveTab(tabs[nextIndex]);
+			// Focus the next tab button
+			setTimeout(() => {
+				const nextTabButton = document.querySelector(
+					`button[role="tab"][aria-controls="mobile-editor-panel-${tabs[nextIndex]}"]`
+				) as HTMLButtonElement;
+				nextTabButton?.focus();
+			}, 0);
+		}
+	}, []);
+
 	const fieldsetRef = useRef<HTMLFieldSetElement | null>(null);
 	const tabStripRef = useRef<HTMLDivElement | null>(null);
 	const tabViewportRef = useRef<HTMLDivElement | null>(null);
@@ -469,9 +502,12 @@ export function MobileEditModal({
 							key={tab}
 							type="button"
 							role="tab"
+							id={`mobile-editor-tab-${tab}`}
 							aria-selected={activeTab === tab}
+							aria-controls={`mobile-editor-panel-${tab}`}
 							className={[classes.tab, activeTab === tab ? classes.tabActive : ""].filter(Boolean).join(" ")}
 							onClick={() => setActiveTab(tab)}
+							onKeyDown={(e) => handleTabKeyDown(e, tab)}
 						>
 							{t(`form.sections.${tab}`)}
 						</button>
@@ -505,7 +541,13 @@ export function MobileEditModal({
 								.join(" ")}
 							style={{ transform: tabPanelTransform }}
 						>
-							<div className={[classes.tabPanel, activeTab === "general" ? classes.tabPanelActive : ""].join(" ")}>
+							<div
+								role="tabpanel"
+								id="mobile-editor-panel-general"
+								aria-labelledby="mobile-editor-tab-general"
+								hidden={activeTab !== "general"}
+								className={[classes.tabPanel, activeTab === "general" ? classes.tabPanelActive : ""].join(" ")}
+							>
 								<div className={["full", formClasses.category, classes.category].join(" ")}>
 									<h4 className={formClasses.categoryTitle}>{t("form.sections.general")}</h4>
 									<div className={classes.sectionCard}>
@@ -701,21 +743,33 @@ export function MobileEditModal({
 												</AppTooltip>
 											</div>
 										) : (
-											<input
-												type="file"
-												accept="image/*"
-												onChange={(e) => {
-													const file = e.target.files?.[0];
-													e.target.value = "";
-													if (file) void onUploadMedImage(editingId, file);
-												}}
-											/>
+											<>
+												<label htmlFor="mobile-med-image-upload" className="visually-hidden">
+													{t("form.uploadImage")}
+												</label>
+												<input
+													id="mobile-med-image-upload"
+													type="file"
+													accept="image/*"
+													onChange={(e) => {
+														const file = e.target.files?.[0];
+														e.target.value = "";
+														if (file) void onUploadMedImage(editingId, file);
+													}}
+												/>
+											</>
 										)}
 										{imageUploadError && <span className="field-error">{imageUploadError}</span>}
 									</div>
 								)}
 							</div>
-							<div className={[classes.tabPanel, activeTab === "stock" ? classes.tabPanelActive : ""].join(" ")}>
+							<div
+								role="tabpanel"
+								id="mobile-editor-panel-stock"
+								aria-labelledby="mobile-editor-tab-stock"
+								hidden={activeTab !== "stock"}
+								className={[classes.tabPanel, activeTab === "stock" ? classes.tabPanelActive : ""].join(" ")}
+							>
 								<div className={["full", formClasses.category, classes.category].join(" ")}>
 									<h4 className={formClasses.categoryTitle}>{t("form.sections.stock")}</h4>
 									<div className={classes.sectionCard}>
@@ -943,7 +997,13 @@ export function MobileEditModal({
 									</div>
 								</div>
 							</div>
-							<div className={[classes.tabPanel, activeTab === "schedule" ? classes.tabPanelActive : ""].join(" ")}>
+							<div
+								role="tabpanel"
+								id="mobile-editor-panel-schedule"
+								aria-labelledby="mobile-editor-tab-schedule"
+								hidden={activeTab !== "schedule"}
+								className={[classes.tabPanel, activeTab === "schedule" ? classes.tabPanelActive : ""].join(" ")}
+							>
 								<div className={["full", formClasses.category, formClasses.intakeSection, classes.category].join(" ")}>
 									<div className={formClasses.categoryHeader}>
 										<h4 className={formClasses.categoryTitle}>{t("form.blisters.title")}</h4>
@@ -1121,7 +1181,13 @@ export function MobileEditModal({
 									})}
 								</div>
 							</div>
-							<div className={[classes.tabPanel, activeTab === "prescription" ? classes.tabPanelActive : ""].join(" ")}>
+							<div
+								role="tabpanel"
+								id="mobile-editor-panel-prescription"
+								aria-labelledby="mobile-editor-tab-prescription"
+								hidden={activeTab !== "prescription"}
+								className={[classes.tabPanel, activeTab === "prescription" ? classes.tabPanelActive : ""].join(" ")}
+							>
 								<div className={["full", formClasses.category, classes.category].join(" ")}>
 									<h4 className={formClasses.categoryTitle}>{t("form.sections.prescription")}</h4>
 									<div className={classes.sectionCard}>

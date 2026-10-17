@@ -871,7 +871,8 @@
     "pillsTotal_other": "{{count}} Tabletten gesamt",
     "max": "max",
     "on": "An",
-    "off": "Aus"
+    "off": "Aus",
+    "skipToMainContent": "Zum Hauptinhalt springen"
   },
   "share": {
     "button": "Teilen",

@@ -830,6 +830,7 @@ export function MedDetailModal({
 			opened={Boolean(selectedMed)}
 			rootClassName={classes["med-detail-overlay"]}
 			size={711}
+			trapFocus={!showImageLightbox}
 			withCloseButton
 		>
 			<div ref={detailModalRef} tabIndex={-1} className={classes["med-detail-focus-scope"]}>

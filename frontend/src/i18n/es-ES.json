@@ -871,7 +871,8 @@
     "pillsTotal_other": "{{count}} pastillas en total",
     "max": "máx.",
     "on": "Encendido",
-    "off": "Apagado"
+    "off": "Apagado",
+    "skipToMainContent": "Saltar al contenido principal"
   },
   "share": {
     "button": "Compartir",

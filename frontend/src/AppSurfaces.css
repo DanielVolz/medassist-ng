@@ -2782,3 +2782,27 @@ button.has-validation-error {
 		grid-template-columns: 1fr;
 	}
 }
+
+/* ============================================================================
+ * WCAG 2.1 Level A (2.4.1 Bypass Blocks): Skip link
+ * ========================================================================== */
+.skip-link {
+	position: absolute;
+	top: -40px;
+	left: 0;
+	z-index: 10000;
+	padding: 0.5rem 1rem;
+	background: var(--color-primary, #2563eb);
+	color: white;
+	text-decoration: none;
+	border-radius: 0 0 4px 0;
+	font-weight: 500;
+	font-size: 0.875rem;
+	transition: top 0.3s;
+}
+
+.skip-link:focus {
+	top: 0;
+	outline: 2px solid var(--color-primary-light, #60a5fa);
+	outline-offset: 2px;
+}

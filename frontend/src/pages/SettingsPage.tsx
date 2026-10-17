@@ -7,6 +7,7 @@ import ExportModal from "../components/ExportModal";
 import { ImportReviewModal } from "../components/ImportReviewModal";
 import { SettingsActionCard, SettingsOptionCard, SettingsSuccessNotice } from "../components/settings/SettingsCards";
 import { useAppContext } from "../context";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useModalHistory } from "../hooks/useModalHistory";
 import { SectionCard } from "../ui/components/SectionCard";
 import { AppButton } from "../ui/primitives/AppButton";
@@ -28,6 +29,7 @@ function surfaceClass(...classNames: Array<string | false | null | undefined>) {
 }
 
 export function SettingsPage() {
+	useDocumentTitle("nav.settings");
 	const { t, i18n } = useTranslation();
 	const { authFetch } = useAuth();
 	const [apiKeyToken, setApiKeyToken] = useState("");

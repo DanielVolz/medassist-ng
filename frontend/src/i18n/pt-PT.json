@@ -1256,6 +1256,7 @@
     "max": "máx.",
     "on": "Sobre",
     "off": "Desligado",
-    "pillsTotal_many": "{{count}} total de comprimidos"
+    "pillsTotal_many": "{{count}} total de comprimidos",
+    "skipToMainContent": "Saltar para o conteúdo principal"
   }
 }

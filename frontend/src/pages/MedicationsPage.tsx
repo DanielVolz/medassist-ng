@@ -25,6 +25,7 @@ import {
 	hasMedicationWeekdaySelectionError,
 	MEDICATION_FORM_FIELD_LIMITS,
 } from "../hooks/medicationFormModel";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import {
 	MEDICATION_ENRICHMENT_INITIAL_LIMIT,
 	MEDICATION_ENRICHMENT_LIMIT_STEP,
@@ -237,6 +238,7 @@ async function getMedicationEnrichmentErrorMessage(
 }
 
 export function MedicationsPage() {
+	useDocumentTitle("nav.medications");
 	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const { t } = useTranslation();

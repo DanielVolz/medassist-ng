@@ -16,6 +16,7 @@ import { MedicationAvatar } from "../components/MedicationAvatar";
 import { useAppContext } from "../context";
 import { useFeedback } from "../context/FeedbackContext";
 import scheduleActionClasses from "../features/schedule/components/ScheduleHeaderActions.module.css";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useModalHistory } from "../hooks/useModalHistory";
 import {
 	allowsPillFormSelection,
@@ -119,6 +120,7 @@ function getDosePersonTextColor(isTaken: boolean, isSkipped: boolean): string {
 const EMPTY_DOSE_SET = new Set<string>();
 
 export function DashboardPage() {
+	useDocumentTitle("nav.dashboard");
 	const { t, i18n } = useTranslation();
 	const { user, authFetch } = useAuth();
 	const { showFeedback } = useFeedback();

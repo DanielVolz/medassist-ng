@@ -133,6 +133,21 @@ function AuthStatusCard({ theme, children }: { theme: "light" | "dark"; children
 // Main App Wrapper with Auth
 // =============================================================================
 export default function App() {
+	const { i18n } = useTranslation();
+
+	// WCAG 2.1 Level A (3.1.1 Language of Page): Set HTML lang attribute dynamically
+	useEffect(() => {
+		// Map App-Locale to HTML lang code (BCP 47 language tags)
+		const langMap: Record<string, string> = {
+			"en-US": "en",
+			"de-DE": "de",
+			"pt-PT": "pt",
+			"es-ES": "es",
+		};
+		const htmlLang = langMap[i18n.language] || "en";
+		document.documentElement.setAttribute("lang", htmlLang);
+	}, [i18n.language]);
+
 	return (
 		<AuthProvider>
 			<FeedbackProvider>
@@ -700,7 +715,12 @@ function AppContent() {
 	}, []);
 
 	return (
-		<Box className={classes.page} component="main" data-testid="app-shell">
+		<Box className={classes.page} component="main" id="main-content" data-testid="app-shell">
+			{/* WCAG 2.1 Level A (2.4.1 Bypass Blocks): Skip link for keyboard navigation */}
+			<a href="#main-content" className={classes.skipLink}>
+				{t("common.skipToMainContent")}
+			</a>
+
 			<AppHeader onOpenProfile={openProfile} onOpenAbout={openAbout} />
 
 			{shouldRenderMainSwipeHint && (

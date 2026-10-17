@@ -871,7 +871,8 @@
     "pillsTotal_other": "{{count}} pills total",
     "max": "max",
     "on": "On",
-    "off": "Off"
+    "off": "Off",
+    "skipToMainContent": "Skip to main content"
   },
   "share": {
     "button": "Share",

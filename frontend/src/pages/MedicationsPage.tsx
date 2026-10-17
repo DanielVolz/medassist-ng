@@ -1185,13 +1185,17 @@ export function MedicationsPage() {
 		if (readOnlyView) return;
 		if (getMedicationFormIssues(form, t).hasErrors) {
 			setShowNameValidation(true);
-			// Scroll to first visible error so the user sees what's wrong
-			const firstError = document.querySelector(".field-error");
-			if (firstError) {
-				firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+			// Move focus to the first visible error for keyboard and
+			// screen-reader users, then scroll it into view.
+			const fieldErrors = Array.from(document.querySelectorAll<HTMLElement>(".field-error"));
+			const firstVisibleError = fieldErrors.find((el) => el.offsetParent !== null);
+			if (firstVisibleError) {
+				firstVisibleError.tabIndex = -1;
+				firstVisibleError.scrollIntoView({ behavior: "smooth", block: "center" });
+				firstVisibleError.focus();
 				// Brief highlight pulse
-				firstError.classList.add("error-pulse");
-				setTimeout(() => firstError.classList.remove("error-pulse"), 1500);
+				firstVisibleError.classList.add("error-pulse");
+				setTimeout(() => firstVisibleError.classList.remove("error-pulse"), 1500);
 			}
 			return;
 		}

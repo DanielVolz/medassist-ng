@@ -736,6 +736,8 @@
     "markAsSkipped": "Als ausgelassen markieren",
     "undoTake": "Nehmen rückgängig",
     "undoSkip": "Auslassen rückgängig",
+    "takenAnnouncement": "Einnahme als eingenommen markiert",
+    "undoneAnnouncement": "Einnahme als nicht eingenommen markiert",
     "actionBlocked": {
       "futureTake": "Zukünftige Einnahmen können noch nicht als eingenommen markiert werden.",
       "futureSkip": "Zukünftige Einnahmen können noch nicht übersprungen werden."

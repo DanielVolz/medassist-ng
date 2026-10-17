@@ -736,6 +736,8 @@
     "markAsSkipped": "Marcar como omitida",
     "undoTake": "Deshacer toma",
     "undoSkip": "Deshacer omisión",
+    "takenAnnouncement": "Dosis marcada como tomada",
+    "undoneAnnouncement": "Dosis marcada como no tomada",
     "actionBlocked": {
       "futureTake": "Las tomas futuras aún no se pueden marcar como tomadas.",
       "futureSkip": "Las tomas futuras aún no se pueden omitir."

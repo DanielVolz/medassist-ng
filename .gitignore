@@ -110,3 +110,4 @@ ops/medtest/
 # ===================
 .codex/
 .kilocode/rules/rtk-rules.md
+docker-compose.medtest-dev.yml

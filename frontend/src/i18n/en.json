@@ -736,6 +736,8 @@
     "markAsSkipped": "Mark as skipped",
     "undoTake": "Undo take",
     "undoSkip": "Undo skip",
+    "takenAnnouncement": "Dose marked as taken",
+    "undoneAnnouncement": "Dose marked as not taken",
     "actionBlocked": {
       "futureTake": "Future intakes cannot be marked as taken yet.",
       "futureSkip": "Future intakes cannot be skipped yet."

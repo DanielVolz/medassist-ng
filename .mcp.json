@@ -71,6 +71,10 @@
 			"tools": [
 				"*"
 			]
+		},
+		"my-mcp-server-fa42d638": {
+			"url": "https://mcp.figma.com/mcp",
+			"type": "http"
 		}
 	}
 }

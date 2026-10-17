@@ -186,6 +186,30 @@ export function DashboardPage() {
 	const [showObsoleteConfirm, setShowObsoleteConfirm] = useState(false);
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<{ id: number; name: string } | null>(null);
 	const notificationFocusAppliedRef = useRef<string | null>(null);
+	const [doseAnnouncement, setDoseAnnouncement] = useState("");
+
+	const announceDoseAction = useCallback((message: string) => {
+		// Reset then set to force screen-reader re-announcement for rapid
+		// consecutive take/undo actions on different doses.
+		setDoseAnnouncement("");
+		requestAnimationFrame(() => setDoseAnnouncement(message));
+	}, []);
+
+	const handleMarkDoseTaken = useCallback(
+		(doseId: string) => {
+			void markDoseTaken(doseId);
+			announceDoseAction(t("dose.takenAnnouncement"));
+		},
+		[announceDoseAction, markDoseTaken, t]
+	);
+
+	const handleUndoDoseTaken = useCallback(
+		(doseId: string) => {
+			void undoDoseTaken(doseId);
+			announceDoseAction(t("dose.undoneAnnouncement"));
+		},
+		[announceDoseAction, t, undoDoseTaken]
+	);
 
 	const closeClearMissedConfirm = useCallback(() => {
 		if (!clearingMissed) {
@@ -485,7 +509,7 @@ export function DashboardPage() {
 					doseButtonClasses.undo,
 					doseButtonClasses.undoTake
 				)}
-				onClick={() => undoDoseTaken(options.doseId)}
+				onClick={() => handleUndoDoseTaken(options.doseId)}
 				disabled={Boolean(takeBlockLabel)}
 			>
 				{options.isAutomaticallyTaken && !hideDoseActionIcons && (
@@ -511,7 +535,7 @@ export function DashboardPage() {
 					doseButtonClasses.dashboardTake,
 					options.isEmpty && doseButtonClasses.outOfStock
 				)}
-				onClick={() => markDoseTaken(options.doseId)}
+				onClick={() => handleMarkDoseTaken(options.doseId)}
 				disabled={Boolean(takeBlockLabel) || options.isSkipped}
 			>
 				<span className={doseButtonClasses.label}>{t("dose.take")}</span>
@@ -1156,6 +1180,9 @@ export function DashboardPage() {
 
 	return (
 		<>
+			<div className="visually-hidden" aria-live="polite" aria-atomic="true">
+				{doseAnnouncement}
+			</div>
 			<DashboardReminderSection
 				t={t}
 				remindersLoading={remindersLoading}

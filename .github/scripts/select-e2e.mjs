@@ -26,6 +26,7 @@ const SPECS_BY_GROUP = {
 		"schedule.spec.ts",
 	],
 	"core-b": [
+		"accessibility-audit.spec.ts",
 		"auth-session.spec.ts",
 		"dashboard.spec.ts",
 		"domain-safety.spec.ts",

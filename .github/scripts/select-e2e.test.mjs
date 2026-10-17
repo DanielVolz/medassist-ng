@@ -118,7 +118,7 @@ test("every CI group executes the specs in its inventory on the expected Playwri
 		assert.deepEqual(args.slice(3), getSpecsForGroup(group).map((spec) => `e2e/${spec}`));
 		for (const spec of getSpecsForGroup(group)) assigned.add(spec);
 	}
-	assert.equal(assigned.size, 28);
+	assert.equal(assigned.size, 29);
 	assert.deepEqual(
 		FULL_GROUPS.flatMap((group) => getSpecsForGroup(group)).sort(),
 		[...assigned].sort()

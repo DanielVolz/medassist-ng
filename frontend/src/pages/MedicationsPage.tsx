@@ -1896,7 +1896,7 @@ export function MedicationsPage() {
 									}
 									return (
 										<>
-											<label htmlFor="med-image-upload-existing" className="visually-hidden">
+											<label htmlFor="med-image-upload-existing" className={formClasses.imageUploadLabel}>
 												{t("form.uploadImage")}
 											</label>
 											<input
@@ -1936,7 +1936,7 @@ export function MedicationsPage() {
 								}
 								return (
 									<>
-										<label htmlFor="med-image-upload-new" className="visually-hidden">
+										<label htmlFor="med-image-upload-new" className={formClasses.imageUploadLabel}>
 											{t("form.uploadImage")}
 										</label>
 										<input

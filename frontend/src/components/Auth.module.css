@@ -87,6 +87,7 @@
 .formGroup input:focus {
 	border-color: var(--accent);
 	outline: none;
+	box-shadow: var(--focus-ring);
 }
 
 .auth-error {
@@ -604,6 +605,7 @@
 .profile-form .formGroup input:focus {
 	outline: none;
 	border-color: var(--accent);
+	box-shadow: var(--focus-ring);
 }
 
 .profile-form .formGroup input::placeholder {

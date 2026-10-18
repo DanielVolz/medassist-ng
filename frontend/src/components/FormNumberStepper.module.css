@@ -9,7 +9,7 @@
 		minmax(var(--stepper-value-min-width), 1fr)
 		var(--stepper-button-width);
 	align-items: stretch;
-	border: 1px solid var(--border-primary);
+	border: 1px solid var(--border-input);
 	border-radius: var(--input-radius);
 	overflow: hidden;
 	background: var(--bg-input);

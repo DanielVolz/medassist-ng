@@ -3,6 +3,7 @@ import {
 	Button,
 	type CSSVariablesResolver,
 	createTheme,
+	defaultVariantColorsResolver,
 	type MantineColorsTuple,
 	Menu,
 	Popover,
@@ -51,8 +52,8 @@ const yellow: MantineColorsTuple = [
 	"#d99c2e",
 	"#c98e14",
 	"#b27c10",
-	"#936608",
 	"#785305",
+	"#5f3f00",
 ];
 
 /** Success maps to the teal accent in the clinical palette. Overrides Mantine `green`. */
@@ -83,6 +84,20 @@ const blue: MantineColorsTuple = [
 	"#144b5d",
 ];
 
+/** High-emphasis cyan. Shade 8 is dark enough for light-variant badge text (>= 4.5:1). */
+const cyan: MantineColorsTuple = [
+	"#e7f5f7",
+	"#cdebee",
+	"#9dd8de",
+	"#6dc4ce",
+	"#3fb1bf",
+	"#2b9aa8",
+	"#15808e",
+	"#0f6a78",
+	"#0b5f6b",
+	"#08454e",
+];
+
 const appFontFamily = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif';
 const appFontFamilyMonospace = '"IBM Plex Mono", ui-monospace, "SF Mono", monospace';
 const floatingLayerZIndex = 2600;
@@ -101,6 +116,7 @@ interface MedAssistThemeOther {
 	bgGradient: string;
 	borderPrimary: string;
 	borderSecondary: string;
+	borderInput: string;
 	textPrimary: string;
 	textSecondary: string;
 	textMuted: string;
@@ -147,8 +163,9 @@ const darkTokens: MedAssistThemeOther = {
 	bgGradient: "#101314",
 	borderPrimary: "#272c30",
 	borderSecondary: "#383f45",
+	borderInput: "#616870",
 	textPrimary: "#f0f2f3",
-	textSecondary: "#8d979e",
+	textSecondary: "#9aa5ac",
 	textMuted: "#c2cad0",
 	accent: "#2bbf99",
 	accentLight: "#4fd6b2",
@@ -193,14 +210,15 @@ const lightTokens: MedAssistThemeOther = {
 	bgGradient: "#f6f6f4",
 	borderPrimary: "#e3e3de",
 	borderSecondary: "#c9c9c2",
+	borderInput: "#8a8a82",
 	textPrimary: "#1b1f21",
-	textSecondary: "#6b7479",
+	textSecondary: "#545e63",
 	textMuted: "#424a4f",
-	accent: "#0d8a6a",
-	accentLight: "#11a37e",
-	accentBg: "rgba(13, 138, 106, 0.08)",
-	success: "#0d8a6a",
-	successBg: "rgba(13, 138, 106, 0.09)",
+	accent: "#085c46",
+	accentLight: "#0a7257",
+	accentBg: "rgba(8, 92, 70, 0.08)",
+	success: "#085c46",
+	successBg: "rgba(8, 92, 70, 0.09)",
 	danger: "#cf4537",
 	dangerBg: "rgba(207, 69, 55, 0.08)",
 	warning: "#b27c10",
@@ -210,14 +228,14 @@ const lightTokens: MedAssistThemeOther = {
 	surfaceRadius: "10px",
 	surfaceShadow: "none",
 	surfaceBorder: "1px solid var(--border-primary)",
-	focusRing: "0 0 0 3px rgba(13, 138, 106, 0.25)",
+	focusRing: "0 0 0 3px rgba(8, 92, 70, 0.25)",
 	buttonRadius: "8px",
 	inputRadius: "8px",
 	buttonRadiusRound: "50%",
 	buttonShadow: "none",
 	buttonShadowHover: "none",
-	buttonPrimaryBg: "#0d8a6a",
-	buttonPrimaryHover: "#0fa07b",
+	buttonPrimaryBg: "#085c46",
+	buttonPrimaryHover: "#08614a",
 	buttonSubtleHover: "rgba(27, 31, 33, 0.05)",
 	buttonDangerText: "#ffffff",
 	buttonSuccessText: "#ffffff",
@@ -249,6 +267,7 @@ const legacyVarMap: Record<string, string> = {
 	bgGradient: "--bg-gradient",
 	borderPrimary: "--border-primary",
 	borderSecondary: "--border-secondary",
+	borderInput: "--border-input",
 	textPrimary: "--text-primary",
 	textSecondary: "--text-secondary",
 	textMuted: "--text-muted",
@@ -329,9 +348,17 @@ export const cssVariablesResolver: CSSVariablesResolver = (theme) => {
 };
 
 export const mantineTheme = createTheme({
+	variantColorResolver: (input) => {
+		const defaultResolved = defaultVariantColorsResolver(input);
+		if (input.variant === "filled" && (input.color === "brand" || input.color === "green")) {
+			return { ...defaultResolved, color: "var(--button-success-text)" };
+		}
+		return defaultResolved;
+	},
 	colors: {
 		brand,
 		blue,
+		cyan,
 		green,
 		red,
 		yellow,
@@ -382,5 +409,5 @@ export const mantineTheme = createTheme({
 	},
 	other: darkTokens,
 	primaryColor: "brand",
-	primaryShade: { dark: 5, light: 7 },
+	primaryShade: { dark: 5, light: 8 },
 });

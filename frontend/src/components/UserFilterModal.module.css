@@ -71,6 +71,10 @@
 	outline: none;
 }
 
+.medicationItem:focus-visible {
+	box-shadow: var(--focus-ring);
+}
+
 .medicationInfo {
 	flex: 1 1 150px;
 	min-width: 0;

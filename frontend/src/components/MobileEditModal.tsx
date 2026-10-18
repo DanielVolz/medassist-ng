@@ -768,7 +768,7 @@ export function MobileEditModal({
 											</div>
 										) : (
 											<>
-												<label htmlFor="mobile-med-image-upload" className="visually-hidden">
+												<label htmlFor="mobile-med-image-upload" className={formClasses.imageUploadLabel}>
 													{t("form.uploadImage")}
 												</label>
 												<input

@@ -497,7 +497,7 @@ textarea {
 	width: 100%;
 	padding: 0.7rem 0.85rem;
 	border-radius: var(--button-radius);
-	border: 1px solid var(--border-secondary);
+	border: 1px solid var(--border-input);
 	background: var(--bg-input);
 	color: var(--text-primary);
 	font-size: 0.95rem;
@@ -676,7 +676,7 @@ textarea.auto-resize {
 .form-category-title {
 	grid-column: 1 / -1;
 	margin: 0;
-	color: var(--accent-light);
+	color: var(--accent);
 	font-size: 0.78rem;
 	font-weight: 600;
 	text-transform: uppercase;
@@ -774,7 +774,7 @@ textarea.auto-resize {
 	padding: 0.6rem 2rem 0.6rem 0.75rem;
 	font-size: 0.9rem;
 	background-color: var(--bg-secondary);
-	border: 1px solid var(--border-primary);
+	border: 1px solid var(--border-input);
 	border-radius: 8px;
 	color: var(--text-primary);
 	cursor: pointer;
@@ -790,6 +790,7 @@ textarea.auto-resize {
 .package-type-select:focus {
 	outline: none;
 	border-color: var(--accent);
+	box-shadow: var(--focus-ring);
 }
 
 .field-error {
@@ -887,7 +888,7 @@ button.has-validation-error {
 	flex-shrink: 0;
 	padding: 0.5rem 2rem 0.5rem 0.75rem;
 	background-color: var(--bg-primary);
-	border: 1px solid var(--border-primary);
+	border: 1px solid var(--border-input);
 	border-radius: var(--input-radius);
 	color: var(--text-primary);
 	font-size: 0.9rem;
@@ -900,6 +901,7 @@ button.has-validation-error {
 .dose-unit-select:focus {
 	outline: none;
 	border-color: var(--accent);
+	box-shadow: var(--focus-ring);
 }
 
 .medication-enrichment-section {
@@ -983,7 +985,7 @@ button.has-validation-error {
 	height: 0.9rem;
 	border-radius: 999px;
 	border: 2px solid color-mix(in srgb, var(--accent) 24%, transparent);
-	border-top-color: var(--accent-light);
+	border-top-color: var(--accent);
 	animation: medication-enrichment-spin 0.8s linear infinite;
 	flex-shrink: 0;
 }
@@ -1272,7 +1274,7 @@ button.has-validation-error {
 	padding: 0.5rem;
 	min-height: 44px;
 	background: var(--bg-primary);
-	border: 1px solid var(--border-primary);
+	border: 1px solid var(--border-input);
 	border-radius: var(--input-radius);
 	transition:
 		border-color 150ms ease,
@@ -1394,7 +1396,7 @@ button.has-validation-error {
 	font-weight: 500;
 }
 .past-days-count {
-	opacity: 0.6;
+	color: var(--text-secondary);
 	font-size: 0.85rem;
 	white-space: nowrap;
 	flex-shrink: 0;
@@ -1474,7 +1476,7 @@ button.has-validation-error {
 	font-weight: 500;
 }
 .future-days-count {
-	opacity: 0.6;
+	color: var(--text-secondary);
 	font-size: 0.85rem;
 	white-space: nowrap;
 	flex-shrink: 0;
@@ -1552,14 +1554,12 @@ button.has-validation-error {
 .day-block.all-taken.stock-warning .day-divider,
 .day-block.all-taken.stock-danger .day-divider {
 	color: var(--success);
-	opacity: 0.8;
 }
 .day-block.past-missed {
 	border-color: rgba(252, 211, 77, 0.35);
 }
 .day-block.past-missed .day-divider {
 	color: var(--warning);
-	opacity: 0.8;
 }
 .day-block.today.all-taken {
 	border-color: var(--success);
@@ -1572,28 +1572,25 @@ button.has-validation-error {
 }
 .day-block.stock-success .day-divider {
 	color: var(--success);
-	opacity: 0.8;
 }
 .day-block.stock-warning {
 	border-color: rgba(252, 211, 77, 0.35);
 }
 .day-block.stock-warning .day-divider {
 	color: var(--warning);
-	opacity: 0.8;
 }
 .day-block.stock-danger {
 	border-color: rgba(255, 94, 94, 0.35);
 }
 .day-block.stock-danger .day-divider {
 	color: var(--danger);
-	opacity: 0.8;
 }
 
 .day-divider {
 	margin: 0 0 0.5rem;
 	padding-bottom: 0.5rem;
 	border-bottom: 1px solid rgba(47, 134, 246, 0.2);
-	color: var(--accent-light);
+	color: var(--accent);
 	font-weight: 700;
 	font-size: 0.95rem;
 	letter-spacing: 0.02em;
@@ -1628,7 +1625,7 @@ button.has-validation-error {
 .day-summary {
 	font-size: 0.8rem;
 	font-weight: 500;
-	opacity: 0.7;
+	color: var(--text-secondary);
 }
 .day-complete {
 	color: var(--success);
@@ -1808,7 +1805,7 @@ button.has-validation-error {
 	border-radius: 8px;
 	padding: 0.5rem 0.75rem;
 	background: var(--accent-bg);
-	color: var(--accent-light);
+	color: var(--accent);
 	font-weight: 600;
 	font-size: 0.9rem;
 	font-variant-numeric: tabular-nums;
@@ -1949,7 +1946,7 @@ button.has-validation-error {
 
 .dose-time {
 	font-weight: 600;
-	color: var(--accent-light);
+	color: var(--accent);
 	min-width: 50px;
 }
 
@@ -2278,7 +2275,7 @@ button.has-validation-error {
 
 .next-reminder-date {
 	font-size: 0.8rem;
-	color: var(--accent-light);
+	color: var(--accent);
 }
 
 .status-chip {

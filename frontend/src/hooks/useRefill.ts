@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../components/Auth";
+import { useFeedback } from "../context/FeedbackContext";
 import type { Coverage, FormState, Medication, RefillEntry } from "../types";
 import {
 	getMedTotal,
@@ -58,6 +60,8 @@ export interface UseRefillReturn {
 
 export function useRefill(): UseRefillReturn {
 	const { authFetch } = useAuth();
+	const { t } = useTranslation();
+	const { showFeedback } = useFeedback();
 	// Refill state
 	const [showRefillModal, setShowRefillModal] = useState(false);
 	const [refillPacks, setRefillPacks] = useState(1);
@@ -167,13 +171,17 @@ export function useRefill(): UseRefillReturn {
 					loadMeds();
 					// Reload refill history
 					await loadRefillHistory(medId);
+					showFeedback({
+						message: t("refill.success", { pills: data.totalPillsAdded ?? refillPacks }),
+						tone: "success",
+					});
 				}
 			} catch {
 				// ignore
 			}
 			setRefillSaving(false);
 		},
-		[authFetch, refillPacks, refillLoose, closeRefillModal, loadRefillHistory]
+		[authFetch, refillPacks, refillLoose, closeRefillModal, loadRefillHistory, t, showFeedback]
 	);
 
 	// Submit a stock correction - user says how many pills they have RIGHT NOW
@@ -300,13 +308,22 @@ export function useRefill(): UseRefillReturn {
 					closeEditStockModal();
 					// Reload medications to get updated stock
 					loadMeds();
+					showFeedback({ message: t("editStock.success"), tone: "success" });
 				}
 			} catch {
 				// ignore
 			}
 			setEditStockSaving(false);
 		},
-		[authFetch, editStockFullBlisters, editStockPartialBlisterPills, editStockLoosePills, closeEditStockModal]
+		[
+			authFetch,
+			editStockFullBlisters,
+			editStockPartialBlisterPills,
+			editStockLoosePills,
+			closeEditStockModal,
+			t,
+			showFeedback,
+		]
 	);
 
 	const openRefillModal = useCallback(() => {

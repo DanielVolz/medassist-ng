@@ -26,7 +26,9 @@ test.describe("Accessibility audit", () => {
 		test(`${name} page has no critical or serious accessibility violations`, async ({ page }) => {
 			await navigateTo(page, path);
 
-			const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+			const results = await new AxeBuilder({ page })
+				.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+				.analyze();
 
 			const blockingViolations = results.violations.filter(
 				(violation) => violation.impact === "critical" || violation.impact === "serious"

@@ -870,6 +870,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
 								value={emailOrUsername}
 								onChange={(event) => setEmailOrUsername(event.target.value)}
 								required
+								autoComplete="username"
 							/>
 						</div>
 						<AppButton type="submit" className={classes["auth-submit"]} disabled={sending}>

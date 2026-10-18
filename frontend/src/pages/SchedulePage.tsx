@@ -14,6 +14,7 @@ import { useFeedback } from "../context/FeedbackContext";
 import { ScheduleUsageTag } from "../features/schedule/components";
 import scheduleActionClasses from "../features/schedule/components/ScheduleHeaderActions.module.css";
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../features/schedule/formatters";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useModalHistory } from "../hooks/useModalHistory";
 import { useScheduleController } from "../hooks/useScheduleController";
 import type { IntakeUnit } from "../types";
@@ -83,6 +84,7 @@ function getDosePersonTextColor(isTaken: boolean, isSkipped: boolean): string {
 }
 
 export function SchedulePage() {
+	useDocumentTitle("nav.schedule");
 	const { t, i18n } = useTranslation();
 	const { user, authFetch } = useAuth();
 	const { showFeedback } = useFeedback();

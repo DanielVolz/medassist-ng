@@ -390,6 +390,8 @@ describe("MobileEditModal", () => {
 		const form = { ...defaultForm, intakes: [] };
 		render(<MobileEditModal {...defaultProps} form={form} onNoRegularScheduleChange={onNoRegularScheduleChange} />);
 
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
+
 		fireEvent.click(screen.getByRole("checkbox", { name: "form.blisters.noRegularSchedule" }));
 		expect(onNoRegularScheduleChange).toHaveBeenCalledWith(false);
 		expect(screen.getByText("form.blisters.noRegularScheduleHint")).toBeInTheDocument();
@@ -421,6 +423,7 @@ describe("MobileEditModal", () => {
 	it("renders add intake button", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
 		expect(screen.getByRole("button", { name: /form\.blisters\.addIntake/i })).toBeInTheDocument();
 	});
 
@@ -428,6 +431,7 @@ describe("MobileEditModal", () => {
 		const onAddIntake = vi.fn();
 		render(<MobileEditModal {...defaultProps} onAddIntake={onAddIntake} />);
 
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
 		const addBtn = screen.getByRole("button", { name: /form\.blisters\.addIntake/i });
 		fireEvent.click(addBtn);
 
@@ -837,6 +841,8 @@ describe("MobileEditModal field callbacks", () => {
 		const onFormChange = vi.fn();
 		render(<MobileEditModal {...defaultProps} onFormChange={onFormChange} />);
 
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.stock" }));
+
 		const pillWeightLabel = screen.getByText(/form\.pillWeight/i).closest("label") as HTMLElement;
 		const doseUnitSelect = within(pillWeightLabel).getByRole("combobox");
 		fireEvent.change(doseUnitSelect, { target: { value: "g" } });
@@ -1047,6 +1053,7 @@ describe("MobileEditModal optional fields", () => {
 	it("renders intake reminders toggle", () => {
 		render(<MobileEditModal {...defaultProps} />);
 
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
 		expect(screen.getByRole("checkbox", { name: "form.blisters.remind" })).toBeInTheDocument();
 	});
 
@@ -1082,6 +1089,7 @@ describe("MobileEditModal optional fields", () => {
 
 		render(<MobileEditModal {...defaultProps} form={form} onAddIntake={onAddIntake} />);
 
+		fireEvent.click(screen.getByRole("tab", { name: "form.sections.schedule" }));
 		fireEvent.click(screen.getByRole("button", { name: /form\.blisters\.addIntake/i }));
 		expect(onAddIntake).toHaveBeenCalledWith("OnlyPerson");
 	});

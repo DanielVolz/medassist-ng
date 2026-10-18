@@ -94,6 +94,16 @@ The release manager may and should use the authenticated `gh` CLI when available
 - Always clean up dead code from older or failed approaches before handoff. Do not leave unused fallback paths, duplicate logic, stale listeners, unreachable branches, commented-out implementations, or tests for behavior that is no longer part of the final fix.
 - Reuse existing UI patterns and components such as `ConfirmModal`, `MedicationAvatar`, and the existing style system.
 
+## Evidence And Delivery Integrity
+
+- Tie progress and completion claims to observed results. Distinguish what was requested, attempted, actually created or changed, and verified; name any remaining gap before calling the task complete.
+- Identify the origin and status of artifacts when presenting them: actual application capture, agent-generated mockup, local prototype, or artifact created in the requested external system. Never present a simulation or self-generated preview as evidence that the target system was changed.
+- Verify delivery in the requested destination before claiming it exists there. A local screenshot, generated file, successful connection, or submitted request does not prove that an editable external artifact was created or persisted; inspect the resulting artifact and provide its reference when available.
+- Do not silently replace the agreed deliverable with a more convenient substitute. Explain the limitation and obtain agreement before treating a fallback as fulfillment; exploratory alternatives must remain clearly labeled and must not obscure the unfinished original objective.
+- Separate observations from interpretations and hypotheses. State when a cause is unknown; a later success does not establish why an earlier attempt failed. Correct unsupported claims explicitly rather than replacing them with another confident explanation.
+- A tool missing from the current chat does not establish that the user's setup or authorization is wrong. Report the precise observed limitation, check available evidence, and avoid repeated configuration instructions without evidence that they address the problem.
+- Report verification at its actual scope. Visual inspection of a static design is not functional, responsive, accessibility, or production validation. Instructions reduce risk but do not justify guarantees that mistakes cannot recur.
+
 ## Knip Audit
 
 - Run `npm run check:knip` when changing dependencies or cleaning up unused code; `knip.jsonc` covers root, backend, frontend, and shared. The full audit runs in PR CI.

@@ -6,7 +6,7 @@
 	width: 100%;
 	min-height: 44px;
 	padding: 0.7rem 2.5rem 0.7rem 0.85rem;
-	border: 1px solid var(--border-secondary);
+	border: 1px solid var(--border-input);
 	border-radius: var(--button-radius);
 	background: var(--bg-input);
 	color: var(--text-primary);
@@ -22,7 +22,7 @@
 }
 
 .monthPickerInput:hover {
-	border-color: var(--border-primary);
+	border-color: var(--text-secondary);
 }
 
 .monthPickerInput:focus,

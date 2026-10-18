@@ -736,6 +736,8 @@
     "markAsSkipped": "Als ausgelassen markieren",
     "undoTake": "Nehmen rückgängig",
     "undoSkip": "Auslassen rückgängig",
+    "takenAnnouncement": "Einnahme als eingenommen markiert",
+    "undoneAnnouncement": "Einnahme als nicht eingenommen markiert",
     "actionBlocked": {
       "futureTake": "Zukünftige Einnahmen können noch nicht als eingenommen markiert werden.",
       "futureSkip": "Zukünftige Einnahmen können noch nicht übersprungen werden."
@@ -831,6 +833,7 @@
     "hide": "Ausblenden",
     "edit": "Bearbeiten",
     "view": "Ansehen",
+    "viewImage": "Bild ansehen",
     "delete": "Löschen",
     "remove": "Entfernen",
     "reset": "Zurücksetzen",
@@ -868,7 +871,8 @@
     "pillsTotal_other": "{{count}} Tabletten gesamt",
     "max": "max",
     "on": "An",
-    "off": "Aus"
+    "off": "Aus",
+    "skipToMainContent": "Zum Hauptinhalt springen"
   },
   "share": {
     "button": "Teilen",

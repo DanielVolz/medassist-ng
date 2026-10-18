@@ -25,6 +25,7 @@ import {
 	hasMedicationWeekdaySelectionError,
 	MEDICATION_FORM_FIELD_LIMITS,
 } from "../hooks/medicationFormModel";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import {
 	MEDICATION_ENRICHMENT_INITIAL_LIMIT,
 	MEDICATION_ENRICHMENT_LIMIT_STEP,
@@ -237,6 +238,7 @@ async function getMedicationEnrichmentErrorMessage(
 }
 
 export function MedicationsPage() {
+	useDocumentTitle("nav.medications");
 	const location = useLocation();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const { t } = useTranslation();
@@ -298,6 +300,39 @@ export function MedicationsPage() {
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
 	const closeLightbox = useCallback(() => setLightboxImage(null), []);
 	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
+
+	// Tab keyboard navigation handler
+	const handleTabKeyDown = useCallback((e: React.KeyboardEvent<HTMLButtonElement>, tabName: typeof activeTab) => {
+		const tabs: Array<typeof activeTab> = ["general", "stock", "schedule", "prescription"];
+		const currentIndex = tabs.indexOf(tabName);
+		let nextIndex: number | null = null;
+
+		if (e.key === "ArrowRight") {
+			e.preventDefault();
+			nextIndex = (currentIndex + 1) % tabs.length;
+		} else if (e.key === "ArrowLeft") {
+			e.preventDefault();
+			nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+		} else if (e.key === "Home") {
+			e.preventDefault();
+			nextIndex = 0;
+		} else if (e.key === "End") {
+			e.preventDefault();
+			nextIndex = tabs.length - 1;
+		}
+
+		if (nextIndex !== null) {
+			setActiveTab(tabs[nextIndex]);
+			// Focus the next tab button
+			setTimeout(() => {
+				const nextTabButton = document.querySelector(
+					`button[role="tab"][aria-controls="med-editor-panel-${tabs[nextIndex]}"]`
+				) as HTMLButtonElement;
+				nextTabButton?.focus();
+			}, 0);
+		}
+	}, []);
+
 	const [recordNowMedication, setRecordNowMedication] = useState<Medication | null>(null);
 	const canRecordNow = useCallback(
 		(medication: Medication) => {
@@ -1152,13 +1187,17 @@ export function MedicationsPage() {
 		if (readOnlyView) return;
 		if (getMedicationFormIssues(form, t).hasErrors) {
 			setShowNameValidation(true);
-			// Scroll to first visible error so the user sees what's wrong
-			const firstError = document.querySelector(".field-error");
-			if (firstError) {
-				firstError.scrollIntoView({ behavior: "smooth", block: "center" });
+			// Move focus to the first visible error for keyboard and
+			// screen-reader users, then scroll it into view.
+			const fieldErrors = Array.from(document.querySelectorAll<HTMLElement>(".field-error"));
+			const firstVisibleError = fieldErrors.find((el) => el.offsetParent !== null);
+			if (firstVisibleError) {
+				firstVisibleError.tabIndex = -1;
+				firstVisibleError.scrollIntoView({ behavior: "smooth", block: "center" });
+				firstVisibleError.focus();
 				// Brief highlight pulse
-				firstError.classList.add("error-pulse");
-				setTimeout(() => firstError.classList.remove("error-pulse"), 1500);
+				firstVisibleError.classList.add("error-pulse");
+				setTimeout(() => firstVisibleError.classList.remove("error-pulse"), 1500);
 			}
 			return;
 		}
@@ -1556,44 +1595,56 @@ export function MedicationsPage() {
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-general"
 							aria-selected={activeTab === "general"}
+							aria-controls="med-editor-panel-general"
 							className={[formClasses.tab, activeTab === "general" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("general")}
+							onKeyDown={(e) => handleTabKeyDown(e, "general")}
 						>
 							{t("form.sections.general")}
 						</button>
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-stock"
 							aria-selected={activeTab === "stock"}
+							aria-controls="med-editor-panel-stock"
 							className={[formClasses.tab, activeTab === "stock" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("stock")}
+							onKeyDown={(e) => handleTabKeyDown(e, "stock")}
 						>
 							{t("form.sections.stock")}
 						</button>
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-schedule"
 							aria-selected={activeTab === "schedule"}
+							aria-controls="med-editor-panel-schedule"
 							className={[formClasses.tab, activeTab === "schedule" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("schedule")}
+							onKeyDown={(e) => handleTabKeyDown(e, "schedule")}
 						>
 							{t("form.sections.schedule")}
 						</button>
 						<button
 							type="button"
 							role="tab"
+							id="med-editor-tab-prescription"
 							aria-selected={activeTab === "prescription"}
+							aria-controls="med-editor-panel-prescription"
 							className={[formClasses.tab, activeTab === "prescription" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
 							onClick={() => setActiveTab("prescription")}
+							onKeyDown={(e) => handleTabKeyDown(e, "prescription")}
 						>
 							{t("form.sections.prescription")}
 						</button>
@@ -1618,6 +1669,10 @@ export function MedicationsPage() {
 			>
 				<fieldset className="readonly-fieldset" disabled={readOnlyView}>
 					<div
+						role="tabpanel"
+						id="med-editor-panel-general"
+						aria-labelledby="med-editor-tab-general"
+						hidden={activeTab !== "general"}
 						className={[formClasses.tabPanel, activeTab === "general" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}
@@ -1635,9 +1690,13 @@ export function MedicationsPage() {
 									onBlur={() => setShowNameValidation(true)}
 									placeholder={t("form.placeholders.commercial")}
 									maxLength={MEDICATION_FORM_FIELD_LIMITS.name.max}
+									aria-invalid={!readOnlyView && showNameValidation && fieldErrors.name ? true : undefined}
+									aria-describedby={!readOnlyView && showNameValidation && fieldErrors.name ? "name-error" : undefined}
 								/>
 								{!readOnlyView && showNameValidation && fieldErrors.name && (
-									<span className="field-error">{fieldErrors.name}</span>
+									<span id="name-error" className="field-error" role="alert">
+										{fieldErrors.name}
+									</span>
 								)}
 							</label>
 							<label className={!readOnlyView && showNameValidation && fieldErrors.genericName ? "has-error" : ""}>
@@ -1651,9 +1710,15 @@ export function MedicationsPage() {
 									onBlur={() => setShowNameValidation(true)}
 									placeholder={t("form.placeholders.generic")}
 									maxLength={MEDICATION_FORM_FIELD_LIMITS.genericName.max}
+									aria-invalid={!readOnlyView && showNameValidation && fieldErrors.genericName ? true : undefined}
+									aria-describedby={
+										!readOnlyView && showNameValidation && fieldErrors.genericName ? "generic-name-error" : undefined
+									}
 								/>
 								{!readOnlyView && showNameValidation && fieldErrors.genericName && (
-									<span className="field-error">{fieldErrors.genericName}</span>
+									<span id="generic-name-error" className="field-error" role="alert">
+										{fieldErrors.genericName}
+									</span>
 								)}
 							</label>
 							<MedicationEnrichmentSection
@@ -1672,8 +1737,14 @@ export function MedicationsPage() {
 										value={form.medicationStartDate}
 										onChange={(e) => handleValueChange("medicationStartDate", e.target.value)}
 										placeholder={t("common.optional")}
+										aria-invalid={!readOnlyView && dateConsistencyError ? true : undefined}
+										aria-describedby={!readOnlyView && dateConsistencyError ? "date-error" : undefined}
 									/>
-									{!readOnlyView && dateConsistencyError && <span className="field-error">{dateConsistencyError}</span>}
+									{!readOnlyView && dateConsistencyError && (
+										<span id="date-error" className="field-error" role="alert">
+											{dateConsistencyError}
+										</span>
+									)}
 								</label>
 								<label className="date-pair-field">
 									{t("form.medicationEndDate")}
@@ -1775,6 +1846,8 @@ export function MedicationsPage() {
 												}
 												maxLength={MEDICATION_FORM_FIELD_LIMITS.takenBy.max}
 												list="takenby-suggestions"
+												aria-invalid={fieldErrors.takenBy ? true : undefined}
+												aria-describedby={fieldErrors.takenBy ? "taken-by-error" : undefined}
 											/>
 											<datalist id="takenby-suggestions">
 												{existingPeople
@@ -1786,7 +1859,11 @@ export function MedicationsPage() {
 										</>
 									)}
 								</div>
-								{fieldErrors.takenBy && <span className="field-error">{fieldErrors.takenBy}</span>}
+								{fieldErrors.takenBy && (
+									<span id="taken-by-error" className="field-error" role="alert">
+										{fieldErrors.takenBy}
+									</span>
+								)}
 							</label>
 						</div>
 
@@ -1818,16 +1895,22 @@ export function MedicationsPage() {
 										);
 									}
 									return (
-										<input
-											type="file"
-											accept="image/jpeg,image/png,image/webp,image/gif"
-											onChange={(e) => {
-												const file = e.target.files?.[0];
-												e.target.value = "";
-												if (file) void tryUploadMedImage(editingId, file);
-											}}
-											disabled={uploadingImage}
-										/>
+										<>
+											<label htmlFor="med-image-upload-existing" className={formClasses.imageUploadLabel}>
+												{t("form.uploadImage")}
+											</label>
+											<input
+												id="med-image-upload-existing"
+												type="file"
+												accept="image/jpeg,image/png,image/webp,image/gif"
+												onChange={(e) => {
+													const file = e.target.files?.[0];
+													e.target.value = "";
+													if (file) void tryUploadMedImage(editingId, file);
+												}}
+												disabled={uploadingImage}
+											/>
+										</>
 									);
 								}
 								if (pendingImagePreview) {
@@ -1852,11 +1935,17 @@ export function MedicationsPage() {
 									);
 								}
 								return (
-									<input
-										type="file"
-										accept="image/jpeg,image/png,image/webp,image/gif"
-										onChange={handlePendingMedicationImageSelection}
-									/>
+									<>
+										<label htmlFor="med-image-upload-new" className={formClasses.imageUploadLabel}>
+											{t("form.uploadImage")}
+										</label>
+										<input
+											id="med-image-upload-new"
+											type="file"
+											accept="image/jpeg,image/png,image/webp,image/gif"
+											onChange={handlePendingMedicationImageSelection}
+										/>
+									</>
 								);
 							})()}
 							{imageUploadError && <span className="field-error">{imageUploadError}</span>}
@@ -1865,6 +1954,10 @@ export function MedicationsPage() {
 					{/* end general tab */}
 
 					<div
+						role="tabpanel"
+						id="med-editor-panel-stock"
+						aria-labelledby="med-editor-tab-stock"
+						hidden={activeTab !== "stock"}
 						className={[formClasses.tabPanel, activeTab === "stock" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}
@@ -2057,6 +2150,8 @@ export function MedicationsPage() {
 									rows={2}
 									maxLength={MEDICATION_FORM_FIELD_LIMITS.notes.max}
 									className="auto-resize"
+									aria-invalid={fieldErrors.notes ? true : undefined}
+									aria-describedby={fieldErrors.notes ? "notes-error" : undefined}
 									onInput={(e) => {
 										const t = e.target as HTMLTextAreaElement;
 										t.style.height = "auto";
@@ -2073,13 +2168,21 @@ export function MedicationsPage() {
 										})}
 									</span>
 								)}
-								{fieldErrors.notes && <span className="field-error">{fieldErrors.notes}</span>}
+								{fieldErrors.notes && (
+									<span id="notes-error" className="field-error" role="alert">
+										{fieldErrors.notes}
+									</span>
+								)}
 							</label>
 						</div>
 					</div>
 					{/* end stock tab */}
 
 					<div
+						role="tabpanel"
+						id="med-editor-panel-prescription"
+						aria-labelledby="med-editor-tab-prescription"
+						hidden={activeTab !== "prescription"}
 						className={[formClasses.tabPanel, activeTab === "prescription" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}
@@ -2139,6 +2242,10 @@ export function MedicationsPage() {
 					{/* end prescription tab */}
 
 					<div
+						role="tabpanel"
+						id="med-editor-panel-schedule"
+						aria-labelledby="med-editor-tab-schedule"
+						hidden={activeTab !== "schedule"}
 						className={[formClasses.tabPanel, activeTab === "schedule" ? formClasses.tabPanelActive : ""]
 							.filter(Boolean)
 							.join(" ")}

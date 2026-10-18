@@ -1120,6 +1120,8 @@
     "markAsSkipped": "Marcar como ignorado",
     "undoTake": "Desfazer tomada",
     "undoSkip": "Desfazer Ignorar",
+    "takenAnnouncement": "Dose marcada como tomada",
+    "undoneAnnouncement": "Dose marcada como não tomada",
     "actionBlocked": {
       "futureTake": "As entradas futuras ainda não podem ser marcadas como realizadas.",
       "futureSkip": "As ingestões futuras ainda não podem ser ignoradas."
@@ -1215,6 +1217,7 @@
     "hide": "Esconder",
     "edit": "Editar",
     "view": "Visualizar",
+    "viewImage": "Ver imagem",
     "delete": "Eliminar",
     "remove": "Remover",
     "reset": "Reiniciar",
@@ -1253,6 +1256,7 @@
     "max": "máx.",
     "on": "Sobre",
     "off": "Desligado",
-    "pillsTotal_many": "{{count}} total de comprimidos"
+    "pillsTotal_many": "{{count}} total de comprimidos",
+    "skipToMainContent": "Saltar para o conteúdo principal"
   }
 }

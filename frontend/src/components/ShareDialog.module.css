@@ -71,7 +71,7 @@
 .selectField {
 	width: 100%;
 	padding: 0.6rem 2rem 0.6rem 0.75rem;
-	border: 1px solid var(--border-primary);
+	border: 1px solid var(--border-input);
 	border-radius: 8px;
 	background-color: var(--bg-secondary);
 	color: var(--text-primary);
@@ -83,6 +83,7 @@
 .selectField:focus {
 	outline: none;
 	border-color: var(--accent);
+	box-shadow: var(--focus-ring);
 }
 
 .form .inlineCheckbox {

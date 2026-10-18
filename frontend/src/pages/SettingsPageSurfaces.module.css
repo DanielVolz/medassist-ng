@@ -195,7 +195,7 @@
 	font-size: 0.85rem;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--accent-light);
+	color: var(--accent);
 }
 
 .setting-section .setting-desc {
@@ -678,7 +678,7 @@
 	font-size: 0.85rem;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
-	color: var(--accent-light);
+	color: var(--accent);
 }
 
 /* Threshold Input */

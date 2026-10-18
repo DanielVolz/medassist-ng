@@ -6,6 +6,7 @@ import { useAuth } from "../components/Auth";
 import { DateTimeInput } from "../components/DateTimeInput";
 import { MedicationAvatar } from "../components/MedicationAvatar";
 import { useAppContext } from "../context";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import type { Medication, PlannerRow } from "../types";
 import { getMedDisplayName, isAmountBasedPackageType, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { SectionCard } from "../ui/components/SectionCard";
@@ -57,6 +58,7 @@ function userStorageKey(userId: number | undefined, key: string): string {
 }
 
 export function PlannerPage() {
+	useDocumentTitle("nav.planner");
 	const { t } = useTranslation();
 	const { user, authFetch } = useAuth();
 	const { meds, settings, openMedDetail } = useAppContext();

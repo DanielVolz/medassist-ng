@@ -736,6 +736,8 @@
     "markAsSkipped": "Mark as skipped",
     "undoTake": "Undo take",
     "undoSkip": "Undo skip",
+    "takenAnnouncement": "Dose marked as taken",
+    "undoneAnnouncement": "Dose marked as not taken",
     "actionBlocked": {
       "futureTake": "Future intakes cannot be marked as taken yet.",
       "futureSkip": "Future intakes cannot be skipped yet."
@@ -831,6 +833,7 @@
     "hide": "Hide",
     "edit": "Edit",
     "view": "View",
+    "viewImage": "View image",
     "delete": "Delete",
     "remove": "Remove",
     "reset": "Reset",
@@ -868,7 +871,8 @@
     "pillsTotal_other": "{{count}} pills total",
     "max": "max",
     "on": "On",
-    "off": "Off"
+    "off": "Off",
+    "skipToMainContent": "Skip to main content"
   },
   "share": {
     "button": "Share",

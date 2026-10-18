@@ -43,8 +43,8 @@ test("the real group runner forwards selected groups, Playwright projects, and s
 		assert.equal(invocation.ui, group === "ui" ? "true" : "false");
 		assignedSpecs.push(...getSpecsForGroup(group));
 	}
-	assert.equal(assignedSpecs.length, 28);
-	assert.equal(new Set(assignedSpecs).size, 28);
+	assert.equal(assignedSpecs.length, 29);
+	assert.equal(new Set(assignedSpecs).size, 29);
 	assert.deepEqual([...assignedSpecs].sort(), [...new Set(assignedSpecs)].sort());
 });
 

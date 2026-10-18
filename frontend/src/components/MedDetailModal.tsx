@@ -830,24 +830,27 @@ export function MedDetailModal({
 			opened={Boolean(selectedMed)}
 			rootClassName={classes["med-detail-overlay"]}
 			size={711}
+			trapFocus={!showImageLightbox}
 			withCloseButton
 		>
 			<div ref={detailModalRef} tabIndex={-1} className={classes["med-detail-focus-scope"]}>
 				<div className={classes["med-detail-body"]}>
 					{/* Header */}
 					<div className={classes["med-detail-header"]}>
-						<div
+						<button
+							type="button"
+							aria-label={t("common.viewImage")}
 							className={cx(classes["med-detail-avatar-wrapper"], selectedMed.imageUrl && classes.clickable)}
 							onClick={() => selectedMed.imageUrl && onOpenImageLightbox()}
-							onKeyDown={(e) => {
-								if (e.key === "Enter" || e.key === " ") {
-									if (selectedMed.imageUrl) onOpenImageLightbox();
-								}
-							}}
+							disabled={!selectedMed.imageUrl}
 						>
 							<MedicationAvatar name={getMedDisplayName(selectedMed)} imageUrl={selectedMed.imageUrl} size="lg" />
-							{selectedMed.imageUrl && <span className={classes["expand-icon"]}>🔍</span>}
-						</div>
+							{selectedMed.imageUrl && (
+								<span className={classes["expand-icon"]} aria-hidden="true">
+									🔍
+								</span>
+							)}
+						</button>
 						<div className={classes["med-detail-titles"]}>
 							<h2>{getMedDisplayName(selectedMed)}</h2>
 							{selectedMed.name && selectedMed.genericName && (
@@ -1187,18 +1190,22 @@ export function MedDetailModal({
 					{/* Refill History Section */}
 					{refillHistory.length > 0 && (
 						<div className={classes["med-detail-section"]}>
-							<h3
-								className={classes["section-header-clickable"]}
-								onClick={() => onRefillHistoryExpandedChange(!refillHistoryExpanded)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") onRefillHistoryExpandedChange(!refillHistoryExpanded);
-								}}
-							>
-								{t("refill.history")} ({refillHistory.length})
-								<span className={classes["expand-arrow"]}>{refillHistoryExpanded ? "▼" : "▶"}</span>
+							<h3>
+								<button
+									type="button"
+									aria-expanded={refillHistoryExpanded}
+									aria-controls="refill-history-content"
+									className={classes["section-header-clickable"]}
+									onClick={() => onRefillHistoryExpandedChange(!refillHistoryExpanded)}
+								>
+									{t("refill.history")} ({refillHistory.length})
+									<span className={classes["expand-arrow"]} aria-hidden="true">
+										{refillHistoryExpanded ? "▼" : "▶"}
+									</span>
+								</button>
 							</h3>
 							{refillHistoryExpanded && (
-								<div className={classes["refill-history-list"]}>
+								<div id="refill-history-content" className={classes["refill-history-list"]}>
 									{refillHistory.map((entry) => (
 										<div key={entry.id} className={classes["refill-history-item"]}>
 											<span className={classes["refill-date"]}>

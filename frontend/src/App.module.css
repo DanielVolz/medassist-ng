@@ -48,6 +48,28 @@
 	padding: 0 var(--page-pad-x) 1.5rem;
 }
 
+/* WCAG 2.1 Level A (2.4.1 Bypass Blocks): Skip link */
+.skipLink {
+	position: absolute;
+	top: -40px;
+	left: 0;
+	z-index: 10000;
+	padding: 0.5rem 1rem;
+	background: var(--mantine-color-blue-filled);
+	color: white;
+	text-decoration: none;
+	border-radius: 0 0 4px 0;
+	font-weight: 500;
+	font-size: 0.875rem;
+	transition: top 0.3s;
+}
+
+.skipLink:focus {
+	top: 0;
+	outline: 2px solid var(--mantine-color-blue-light);
+	outline-offset: 2px;
+}
+
 .routeSwipeSurface {
 	min-width: 0;
 }

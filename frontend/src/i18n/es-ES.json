@@ -736,6 +736,8 @@
     "markAsSkipped": "Marcar como omitida",
     "undoTake": "Deshacer toma",
     "undoSkip": "Deshacer omisión",
+    "takenAnnouncement": "Dosis marcada como tomada",
+    "undoneAnnouncement": "Dosis marcada como no tomada",
     "actionBlocked": {
       "futureTake": "Las tomas futuras aún no se pueden marcar como tomadas.",
       "futureSkip": "Las tomas futuras aún no se pueden omitir."
@@ -831,6 +833,7 @@
     "hide": "Ocultar",
     "edit": "Editar",
     "view": "Ver",
+    "viewImage": "Ver imagen",
     "delete": "Eliminar",
     "remove": "Remover",
     "reset": "Restablecer",
@@ -868,7 +871,8 @@
     "pillsTotal_other": "{{count}} pastillas en total",
     "max": "máx.",
     "on": "Encendido",
-    "off": "Apagado"
+    "off": "Apagado",
+    "skipToMainContent": "Saltar al contenido principal"
   },
   "share": {
     "button": "Compartir",

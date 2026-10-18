@@ -424,10 +424,21 @@
 .med-detail-avatar-wrapper {
 	position: relative;
 	display: inline-block;
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	line-height: 0;
+	color: inherit;
 }
 
 .med-detail-avatar-wrapper.clickable {
 	cursor: pointer;
+}
+
+.med-detail-avatar-wrapper:disabled {
+	cursor: default;
 }
 
 .med-detail-avatar-wrapper.clickable:hover :global(.med-avatar-lg) {
@@ -901,10 +912,26 @@ h3 .notes-icon.notes-icon-static {
 .section-header-clickable {
 	cursor: pointer;
 	user-select: none;
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	text-transform: inherit;
+	letter-spacing: inherit;
+	color: inherit;
+	text-align: left;
 }
 
-.section-header-clickable:hover {
+.section-header-clickable:hover,
+.section-header-clickable:focus-visible {
 	color: var(--accent);
+}
+
+.section-header-clickable:focus-visible {
+	outline: none;
+	border-radius: 4px;
+	box-shadow: var(--focus-ring);
 }
 
 .refill-history-list {

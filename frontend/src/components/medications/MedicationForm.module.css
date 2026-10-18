@@ -97,23 +97,33 @@
 }
 
 .imageSection input[type="file"] {
-	grid-column: 1 / -1;
-	font-size: 0.9rem;
+	display: none;
 }
 
-.imageSection input[type="file"]::file-selector-button {
-	margin-right: 0.75rem;
+.imageSection .imageUploadLabel {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
 	padding: 0.5rem 1rem;
-	border: none;
 	border-radius: 6px;
 	background: var(--accent);
-	color: white;
+	color: #0a2b1f;
+	font-size: 0.9rem;
 	font-weight: 500;
 	cursor: pointer;
 }
 
-.imageSection input[type="file"]::file-selector-button:hover {
+[data-theme="light"] .imageSection .imageUploadLabel {
+	background: #0a7257;
+	color: #ffffff;
+}
+
+.imageSection .imageUploadLabel:hover {
 	background: var(--accent-light);
+}
+
+[data-theme="light"] .imageSection .imageUploadLabel:hover {
+	background: #075c46;
 }
 
 @media (max-width: 768px) {
@@ -338,6 +348,7 @@
 .packageTypeSelect:focus {
 	outline: none;
 	border-color: var(--accent);
+	box-shadow: var(--focus-ring);
 }
 
 .doseUnitSelect {
@@ -346,7 +357,7 @@
 	min-width: unset;
 	max-width: 120px;
 	padding: 0.5rem 2rem 0.5rem 0.75rem;
-	border: 1px solid var(--border-primary);
+	border: 1px solid var(--border-input);
 	border-radius: var(--input-radius);
 	background-color: var(--bg-primary);
 	background-position: right 0.6rem center;
@@ -363,4 +374,5 @@
 
 .doseUnitSelect:focus {
 	outline: none;
+	box-shadow: var(--focus-ring);
 }

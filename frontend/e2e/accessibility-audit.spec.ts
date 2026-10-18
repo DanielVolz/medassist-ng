@@ -34,9 +34,7 @@ test.describe("Accessibility audit", () => {
 				.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
 				.analyze();
 
-			const blockingViolations = results.violations.filter(
-				(violation) => violation.impact === "critical"
-			);
+			const blockingViolations = results.violations.filter((violation) => violation.impact === "critical");
 
 			expect(
 				blockingViolations,

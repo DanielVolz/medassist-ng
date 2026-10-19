@@ -36,6 +36,7 @@
     },
     "schedules": {
       "title": "Upcoming Schedules",
+      "timeRange": "Time range",
       "1month": "1 month",
       "3months": "3 months",
       "6months": "6 months",

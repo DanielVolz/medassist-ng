@@ -40,6 +40,7 @@
     },
     "schedules": {
       "title": "Próximos horários",
+      "timeRange": "Período de tempo",
       "1month": "1 mês",
       "3months": "3 meses",
       "6months": "6 meses",

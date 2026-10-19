@@ -448,6 +448,7 @@ export function SchedulePage() {
 					<Group className={scheduleActionClasses.actions} gap={0} justify="flex-end" wrap="wrap">
 						<AppSelect
 							size="sm"
+							aria-label={t("dashboard.schedules.timeRange")}
 							classNames={{
 								root: scheduleActionClasses.selectRoot,
 								input: cx("schedule-days-select", scheduleActionClasses.selectInput),

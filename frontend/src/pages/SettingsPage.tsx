@@ -404,6 +404,7 @@ export function SettingsPage() {
 									<div className={surfaceClass("matrix-cell")}>
 										<label className={surfaceClass("toggle-switch", "small", !settings.emailEnabled && "disabled")}>
 											<input
+												aria-label={`${t("settings.notifications.stockReminders")} – ${t("settings.notifications.email")}`}
 												type="checkbox"
 												data-testid="settings-email-stock-reminders-toggle"
 												checked={settings.emailStockReminders}
@@ -416,6 +417,7 @@ export function SettingsPage() {
 									<div className={surfaceClass("matrix-cell")}>
 										<label className={surfaceClass("toggle-switch", "small", !settings.shoutrrrEnabled && "disabled")}>
 											<input
+												aria-label={`${t("settings.notifications.stockReminders")} – ${t("settings.notifications.push")}`}
 												type="checkbox"
 												checked={settings.shoutrrrStockReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrStockReminders: e.target.checked })}
@@ -430,6 +432,7 @@ export function SettingsPage() {
 									<div className={surfaceClass("matrix-cell")}>
 										<label className={surfaceClass("toggle-switch", "small", !settings.emailEnabled && "disabled")}>
 											<input
+												aria-label={`${t("settings.notifications.intakeReminders")} – ${t("settings.notifications.email")}`}
 												type="checkbox"
 												checked={settings.emailIntakeReminders}
 												onChange={(e) => setSettings({ ...settings, emailIntakeReminders: e.target.checked })}
@@ -441,6 +444,7 @@ export function SettingsPage() {
 									<div className={surfaceClass("matrix-cell")}>
 										<label className={surfaceClass("toggle-switch", "small", !settings.shoutrrrEnabled && "disabled")}>
 											<input
+												aria-label={`${t("settings.notifications.intakeReminders")} – ${t("settings.notifications.push")}`}
 												type="checkbox"
 												checked={settings.shoutrrrIntakeReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrIntakeReminders: e.target.checked })}
@@ -457,6 +461,7 @@ export function SettingsPage() {
 									<div className={surfaceClass("matrix-cell")}>
 										<label className={surfaceClass("toggle-switch", "small", !settings.emailEnabled && "disabled")}>
 											<input
+												aria-label={`${t("settings.notifications.prescriptionReminders")} – ${t("settings.notifications.email")}`}
 												type="checkbox"
 												checked={settings.emailPrescriptionReminders}
 												onChange={(e) => setSettings({ ...settings, emailPrescriptionReminders: e.target.checked })}
@@ -468,6 +473,7 @@ export function SettingsPage() {
 									<div className={surfaceClass("matrix-cell")}>
 										<label className={surfaceClass("toggle-switch", "small", !settings.shoutrrrEnabled && "disabled")}>
 											<input
+												aria-label={`${t("settings.notifications.prescriptionReminders")} – ${t("settings.notifications.push")}`}
 												type="checkbox"
 												checked={settings.shoutrrrPrescriptionReminders}
 												onChange={(e) => setSettings({ ...settings, shoutrrrPrescriptionReminders: e.target.checked })}
@@ -496,6 +502,7 @@ export function SettingsPage() {
 									)}
 								>
 									<input
+										aria-label={t("settings.notifications.skipTakenDoses")}
 										type="checkbox"
 										checked={settings.skipRemindersForTakenDoses}
 										onChange={(e) => setSettings({ ...settings, skipRemindersForTakenDoses: e.target.checked })}
@@ -519,6 +526,7 @@ export function SettingsPage() {
 									)}
 								>
 									<input
+										aria-label={t("settings.notifications.repeatReminders")}
 										type="checkbox"
 										checked={settings.repeatRemindersEnabled}
 										onChange={(e) => setSettings({ ...settings, repeatRemindersEnabled: e.target.checked })}
@@ -541,6 +549,7 @@ export function SettingsPage() {
 										</label>
 										<input
 											type="text"
+											aria-label={t("settings.notifications.reminderInterval")}
 											inputMode="numeric"
 											pattern="[0-9]*"
 											value={settings.reminderRepeatIntervalMinutes}
@@ -560,6 +569,7 @@ export function SettingsPage() {
 										</label>
 										<input
 											type="text"
+											aria-label={t("settings.notifications.maxNaggingReminders")}
 											inputMode="numeric"
 											pattern="[0-9]*"
 											value={settings.maxNaggingReminders ?? 5}
@@ -593,6 +603,7 @@ export function SettingsPage() {
 									)}
 								>
 									<input
+										aria-label={t("settings.stockReminder.description")}
 										type="checkbox"
 										checked={
 											(settings.emailEnabled && settings.emailStockReminders) ||
@@ -637,6 +648,7 @@ export function SettingsPage() {
 									)}
 								>
 									<input
+										aria-label={t("settings.stockReminder.repeatDaily")}
 										type="checkbox"
 										checked={settings.repeatDailyReminders}
 										onChange={(e) => setSettings({ ...settings, repeatDailyReminders: e.target.checked })}
@@ -660,6 +672,7 @@ export function SettingsPage() {
 									data-testid="settings-email-enabled-toggle"
 								>
 									<input
+										aria-label={t("settings.notifications.email")}
 										type="checkbox"
 										checked={settings.smtpHost ? settings.emailEnabled : false}
 										onChange={(e) => {
@@ -700,6 +713,7 @@ export function SettingsPage() {
 										<div className={classes.notificationTestRow}>
 											<input
 												type="text"
+												aria-label={t("settings.email.recipient")}
 												className={classes.notificationTestInput}
 												value={settings.notificationEmail}
 												onChange={(e) => setSettings({ ...settings, notificationEmail: e.target.value })}
@@ -744,6 +758,7 @@ export function SettingsPage() {
 								<h3>{t("settings.notifications.push")}</h3>
 								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
+										aria-label={t("settings.notifications.push")}
 										type="checkbox"
 										checked={settings.shoutrrrEnabled}
 										onChange={(e) => {
@@ -776,6 +791,7 @@ export function SettingsPage() {
 										<div className={classes.notificationTestRow}>
 											<input
 												type="text"
+												aria-label={t("settings.push.url")}
 												className={classes.notificationTestInput}
 												value={settings.shoutrrrUrl}
 												onChange={(e) => setSettings({ ...settings, shoutrrrUrl: e.target.value })}
@@ -946,6 +962,7 @@ export function SettingsPage() {
 									</span>
 									<input
 										type="text"
+										aria-label={t("status.criticalStock")}
 										inputMode="numeric"
 										pattern="[0-9]*"
 										value={settings.reminderDaysBefore}
@@ -969,6 +986,7 @@ export function SettingsPage() {
 									</span>
 									<input
 										type="text"
+										aria-label={t("status.lowStock")}
 										inputMode="numeric"
 										pattern="[0-9]*"
 										value={settings.lowStockDays}
@@ -987,6 +1005,7 @@ export function SettingsPage() {
 									</span>
 									<input
 										type="text"
+										aria-label={t("status.highStock")}
 										inputMode="numeric"
 										pattern="[0-9]*"
 										value={settings.highStockDays}
@@ -1019,6 +1038,7 @@ export function SettingsPage() {
 								</div>
 								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
+										aria-label={t("settings.timeline.swapDashboardSections")}
 										type="checkbox"
 										checked={settings.swapDashboardMainSections}
 										onChange={(e) => setSettings({ ...settings, swapDashboardMainSections: e.target.checked })}
@@ -1039,6 +1059,7 @@ export function SettingsPage() {
 								</div>
 								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
+										aria-label={t("settings.timeline.upcomingTodayOnly")}
 										type="checkbox"
 										checked={settings.upcomingTodayOnly}
 										onChange={(e) => setSettings({ ...settings, upcomingTodayOnly: e.target.checked })}
@@ -1059,6 +1080,7 @@ export function SettingsPage() {
 								</div>
 								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
+										aria-label={t("settings.timeline.shareMedicationOverview")}
 										type="checkbox"
 										checked={settings.shareMedicationOverview}
 										onChange={(e) => setSettings({ ...settings, shareMedicationOverview: e.target.checked })}
@@ -1073,6 +1095,7 @@ export function SettingsPage() {
 								</div>
 								<label className={surfaceClass("toggle-switch", "small")}>
 									<input
+										aria-label={t("settings.timeline.shareScheduleTodayOnly")}
 										type="checkbox"
 										checked={settings.shareScheduleTodayOnly}
 										onChange={(e) => setSettings({ ...settings, shareScheduleTodayOnly: e.target.checked })}

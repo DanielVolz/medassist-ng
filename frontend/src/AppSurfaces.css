@@ -2803,3 +2803,10 @@ button.has-validation-error {
 	outline: 2px solid var(--color-primary-light, #60a5fa);
 	outline-offset: 2px;
 }
+
+/* Dark-theme: heller Text für .dose-usage-main auf farbigen Status-Hintergründen */
+[data-theme="dark"] .dose-item.overdue .dose-usage-main,
+[data-theme="dark"] .time-row.med-low .dose-usage-main,
+[data-theme="dark"] .day-block.stock-warning .dose-usage-main {
+	color: #c8d0d8;
+}

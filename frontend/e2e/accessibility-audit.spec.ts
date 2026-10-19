@@ -1,51 +1,64 @@
 import AxeBuilder from "@axe-core/playwright";
-import { authFile, expect, navigateTo, test } from "./fixtures";
+import { authFile, createMedicationViaAPI, expect, navigateTo, test } from "./fixtures";
 
 /**
- * Accessibility Audit E2E Tests
+ * Accessibility audit E2E tests.
  *
- * Runs axe-core scans against the primary authenticated product pages to
- * catch regressions against WCAG 2.1 A/AA automated checks. This is a
- * best-effort automated gate: it blocks only **critical** violations so a
- * threshold of accessibility is preserved without requiring a full manual
- * audit. Serious/moderate/minor findings remain visible in the axe report
- * for triage by the testing owner.
- *
- * Known follow-ups (serious, not gating):
- * - `aria-label` / `aria-labelledby` missing on custom toggle-switch checkboxes
- *   used in Settings, Medications and MobileEditModal. Tracked separately.
+ * Runs axe-core against the primary authenticated pages and the medication
+ * editor, in light and dark themes, with WCAG 2.0, 2.1 and 2.2 A/AA rule tags.
+ * A scan fails on any critical or serious violation. Moderate and minor
+ * findings stay in the axe report for triage. Automated scans cannot replace
+ * the manual screen-reader checks in docs/ACCESSIBILITY_TESTING.md.
  */
 
+const AUDIT_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 const AUDIT_PAGES = [
 	{ path: "/dashboard", name: "Dashboard" },
 	{ path: "/medications", name: "Medications" },
 	{ path: "/planner", name: "Planner" },
 	{ path: "/settings", name: "Settings" },
 ] as const;
+const THEMES = ["light", "dark"] as const;
+
+function blockingViolations(violations: Awaited<ReturnType<AxeBuilder["analyze"]>>["violations"]) {
+	return violations.filter((violation) => violation.impact === "critical" || violation.impact === "serious");
+}
 
 test.describe("Accessibility audit", () => {
 	test.use({ storageState: authFile });
 
-	// Skip while pre-existing critical violations (toggle-switch checkbox accessible
-	// names, schedule-days-select missing name) are addressed in a dedicated follow-up.
-	// The Level AA contrast/focus/status/autocomplete work in this PR is validated by
-	// the medication-ui-regression suite (test:e2e:ui:docker, 16 passed) and by manual
-	// axe scans across all four main pages in both themes (0 color-contrast violations).
-	test.skip(true, "Pre-existing critical label/select violations tracked in a follow-up");
+	for (const theme of THEMES) {
+		for (const { path, name } of AUDIT_PAGES) {
+			test(`${name} page (${theme} theme) has no critical or serious accessibility violations`, async ({ page }) => {
+				await page.addInitScript((value) => window.localStorage.setItem("theme", value), theme);
+				await navigateTo(page, path);
 
-	for (const { path, name } of AUDIT_PAGES) {
-		test(`${name} page has no critical accessibility violations`, async ({ page }) => {
-			await navigateTo(page, path);
+				const results = await new AxeBuilder({ page }).withTags(AUDIT_TAGS).analyze();
 
-			const results = await new AxeBuilder({ page })
-				.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-				.analyze();
+				expect(
+					blockingViolations(results.violations),
+					"Axe found critical/serious accessibility violations; see violation nodes for details"
+				).toEqual([]);
+			});
+		}
 
-			const blockingViolations = results.violations.filter((violation) => violation.impact === "critical");
+		test(`Medication editor (${theme} theme) has no critical or serious accessibility violations`, async ({ page }) => {
+			const medName = `A11y Audit Med ${theme}`;
+			await createMedicationViaAPI({ name: medName });
+			await page.addInitScript((value) => window.localStorage.setItem("theme", value), theme);
+			await navigateTo(page, "/medications");
+
+			const medRow = page.getByTestId("medication-row").filter({ hasText: medName });
+			await medRow.getByRole("button", { name: /Edit|common\.edit/i }).click();
+			await expect(
+				page.getByRole("heading", { name: /(Edit(:| (entry|medication))|form\.editEntry)/i }).first()
+			).toBeVisible({ timeout: 5000 });
+
+			const results = await new AxeBuilder({ page }).withTags(AUDIT_TAGS).analyze();
 
 			expect(
-				blockingViolations,
-				"Axe found critical accessibility violations; see violation nodes for details"
+				blockingViolations(results.violations),
+				"Axe found critical/serious accessibility violations in the medication editor"
 			).toEqual([]);
 		});
 	}

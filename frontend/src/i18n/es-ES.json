@@ -36,6 +36,7 @@
     },
     "schedules": {
       "title": "Próximas tomas",
+      "timeRange": "Intervalo de tiempo",
       "1month": "1 mes",
       "3months": "3 meses",
       "6months": "6 meses",

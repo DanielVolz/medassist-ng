@@ -36,6 +36,7 @@
     },
     "schedules": {
       "title": "Kommende Einnahmen",
+      "timeRange": "Zeitraum",
       "1month": "1 Monat",
       "3months": "3 Monate",
       "6months": "6 Monate",

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { useDoses } from "../hooks/useDoses";
 import type { Settings } from "../hooks/useSettings";
-import { getMedDisplayName, type Medication, type StockThresholds } from "../types";
+import type { Medication, StockThresholds } from "../types";
 import { mergePersonTags } from "../utils/person-tags";
 import { buildSchedulePreview, calculateCoverage, computeMissedPastDoseIds } from "../utils/schedule";
 
@@ -60,23 +60,6 @@ export function useAppSchedule({ meds, systemLocale, settings, doses, scheduleDa
 		[coverage.all]
 	);
 	const coverageByMed = useMemo(() => Object.fromEntries(coverage.all.map((c) => [c.name, c])), [coverage.all]);
-	const outOfStockMedicationIds = useMemo(
-		() =>
-			new Set(
-				activeMeds.filter((med) => (coverageByMed[getMedDisplayName(med)]?.medsLeft ?? 1) <= 0).map((med) => med.id)
-			),
-		[activeMeds, coverageByMed]
-	);
-	const effectiveTakenDoses = useMemo(
-		() =>
-			new Set(
-				Array.from(doses.takenDoses).filter((doseId) => {
-					const medId = Number.parseInt(doseId.split("-")[0] ?? "", 10);
-					return Number.isNaN(medId) || !outOfStockMedicationIds.has(medId);
-				})
-			),
-		[doses.takenDoses, outOfStockMedicationIds]
-	);
 	const stockThresholds: StockThresholds = useMemo(
 		() => ({
 			lowStockDays: settings.lowStockDays,
@@ -162,8 +145,8 @@ export function useAppSchedule({ meds, systemLocale, settings, doses, scheduleDa
 			.slice(0, scheduleDays);
 	}, [groupedSchedule, scheduleDays]);
 	const missedPastDoseIds = useMemo(
-		() => computeMissedPastDoseIds(pastDays, activeMeds, effectiveTakenDoses, doses.dismissedDoses),
-		[pastDays, activeMeds, effectiveTakenDoses, doses.dismissedDoses]
+		() => computeMissedPastDoseIds(pastDays, activeMeds, doses.takenDoses, doses.dismissedDoses),
+		[pastDays, activeMeds, doses.takenDoses, doses.dismissedDoses]
 	);
 	return {
 		activeMeds,

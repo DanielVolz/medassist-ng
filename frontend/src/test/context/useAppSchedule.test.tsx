@@ -70,6 +70,44 @@ function createDoses(takenDoses: Set<string> = new Set(), dismissedDoses: Set<st
 	};
 }
 
+function createMedicationWithHistory(daysAgo: number): Medication {
+	const start = new Date(FIXED_NOW);
+	start.setDate(start.getDate() - daysAgo);
+	start.setHours(8, 0, 0, 0);
+	const eveningStart = new Date(start);
+	eveningStart.setHours(20);
+
+	const totalDoses = daysAgo * 2;
+	return {
+		id: 11,
+		name: "Aspirin",
+		takenBy: ["Max"],
+		packageType: "blister",
+		packCount: 1,
+		blistersPerPack: 1,
+		pillsPerBlister: totalDoses,
+		looseTablets: 0,
+		blisters: [],
+		intakes: [
+			{
+				usage: 1,
+				every: 1,
+				start: localDateTime(start),
+				takenBy: null,
+				intakeRemindersEnabled: false,
+			},
+			{
+				usage: 1,
+				every: 1,
+				start: localDateTime(eveningStart),
+				takenBy: null,
+				intakeRemindersEnabled: false,
+			},
+		],
+		updatedAt: null,
+	};
+}
+
 describe("useAppSchedule", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
@@ -111,6 +149,44 @@ describe("useAppSchedule", () => {
 		});
 
 		expect(result.current.missedPastDoseIds).toEqual(missedCutoffDayDoseIds);
+	});
+
+	it("does not count taken doses as missed when medication stock reaches zero", () => {
+		const med = createMedicationWithHistory(30);
+		const { result, rerender } = renderHook(
+			({ doses }) =>
+				useAppSchedule({
+					meds: [med],
+					systemLocale: SYSTEM_LOCALE,
+					settings: createSettings(),
+					doses,
+					scheduleDays: 31,
+				}),
+			{ initialProps: { doses: createDoses() } }
+		);
+
+		const allPastDoseIds = result.current.pastDays.flatMap((day) =>
+			day.meds.flatMap((medEntry) => medEntry.doses.map((dose) => dose.id))
+		);
+		expect(allPastDoseIds).toHaveLength(60);
+
+		rerender({ doses: createDoses(new Set(allPastDoseIds)) });
+
+		expect(result.current.missedPastDoseIds).toEqual([]);
+		expect(result.current.coverage.all[0]?.medsLeft).toBe(0);
+
+		const [firstDose, secondDose, ...restDoses] = allPastDoseIds;
+		rerender({ doses: createDoses(new Set(restDoses)) });
+		expect(result.current.missedPastDoseIds).toContain(firstDose);
+		expect(result.current.missedPastDoseIds).toContain(secondDose);
+		expect(result.current.missedPastDoseIds).toHaveLength(2);
+
+		rerender({
+			doses: createDoses(new Set(restDoses), new Set([firstDose])),
+		});
+		expect(result.current.missedPastDoseIds).not.toContain(firstDose);
+		expect(result.current.missedPastDoseIds).toContain(secondDose);
+		expect(result.current.missedPastDoseIds).toHaveLength(1);
 	});
 
 	it("keeps derived references for unrelated settings changes and refreshes schedule bounds when requested", () => {

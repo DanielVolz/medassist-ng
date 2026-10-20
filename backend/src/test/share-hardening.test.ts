@@ -178,6 +178,67 @@ describe("share link hardening", () => {
 		await createOwner();
 	});
 
+	it("rejects shared take when medication stock is zero", async () => {
+		const start = buildLocalDoseStart();
+		const result = await testClient.execute({
+			sql: `INSERT INTO medications (
+				user_id, name, taken_by_json, medication_form, package_type,
+				pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
+				usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
+			) VALUES (1, 'Empty Med', ?, 'tablet', 'blister', 0, 1, 10, 0, 0, '[1]', '[1]', ?, ?, 0)
+			RETURNING id`,
+			args: [
+				JSON.stringify(["Daniel"]),
+				JSON.stringify([start]),
+				JSON.stringify([{ usage: 1, every: 1, start, takenBy: "Daniel", intakeRemindersEnabled: false }]),
+			],
+		});
+		const medId = Number(result.rows[0].id);
+		const token = "7777777777777777";
+		await insertShareToken({ token, allowMarkTaken: true });
+		const doseId = `${medId}-0-${new Date(start).getTime()}-Daniel`;
+
+		const response = await app.inject({
+			method: "POST",
+			url: `/share/${token}/doses`,
+			payload: { doseId },
+		});
+
+		expect(response.statusCode).toBe(409);
+		expect(response.json()).toMatchObject({ code: "OUT_OF_STOCK" });
+	});
+
+	it("returns authoritative currentStock per medication even when overview is disabled", async () => {
+		await testClient.execute(
+			"INSERT INTO user_settings (user_id, share_medication_overview, stock_calculation_mode) VALUES (1, 0, 'manual')"
+		);
+		const start = buildLocalDoseStart();
+		await testClient.execute({
+			sql: `INSERT INTO medications (
+				user_id, name, taken_by_json, medication_form, package_type,
+				pack_count, blisters_per_pack, pills_per_blister, loose_tablets, stock_adjustment,
+				usage_json, every_json, start_json, intakes_json, intake_reminders_enabled
+			) VALUES (1, 'Stock Med', ?, 'tablet', 'blister', 1, 1, 10, 5, 0, '[1]', '[1]', ?, ?, 0)`,
+			args: [
+				JSON.stringify(["Daniel"]),
+				JSON.stringify([start]),
+				JSON.stringify([{ usage: 1, every: 1, start, takenBy: "Daniel", intakeRemindersEnabled: false }]),
+			],
+		});
+		const token = "cccccccccccccccc";
+		await insertShareToken({ token });
+
+		const response = await app.inject({ method: "GET", url: `/share/${token}` });
+
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body.shareMedicationOverview).toBe(false);
+		expect(body.medicationOverview).toBeNull();
+		expect(body.medications).toHaveLength(1);
+		expect(body.medications[0].currentStock).toBeTypeOf("number");
+		expect(body.medications[0].currentStock).toBe(15);
+	});
+
 	it("creates new expiring share tokens with 64 hex characters", async () => {
 		await insertMedication();
 

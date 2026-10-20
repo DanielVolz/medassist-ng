@@ -132,6 +132,8 @@ Reports keep scheduled intake results separate from as-needed data. Active as-ne
 
 Public share links do not expose as-needed event history, journals, Record now, reversal, or correction actions. When the medication overview is enabled for a share, its aggregate current-stock value includes active as-needed stock effects for medications already visible under the existing share rules. Existing shared scheduled-dose permissions do not grant as-needed mutation access.
 
+Shared scheduled intakes use the owner's current stock even when the optional medication overview is hidden or the link includes only one person's schedule. Empty medications use the dashboard's empty-state styling and disable **Take** without disabling permitted undo, skip, or note actions. If stock runs out after the page loads, a rejected intake refreshes the stock state and asks the recipient to contact the organizer named in the shared-page footer, or the organizer generically when no name is available.
+
 JSON exports use format version `1.9` and store as-needed events, active/reversed state, replacement links, exact stock effects, and linked journals separately from scheduled dose history. Import preview validates and counts these events before the existing all-or-nothing replacement. Backups from versions `1.0` through `1.8` remain importable and are treated as containing no as-needed events; restoring one therefore replaces any current as-needed history along with the other current account data.
 
 ## Docker Image Pinning

@@ -339,7 +339,7 @@ describe("useAppContext", () => {
 		expect(result.current.settingsChanged).toBe(false);
 	});
 
-	it("derives coverage from active medications and excludes empty-stock taken doses from missed-dose input", () => {
+	it("derives coverage from active medications and passes full takenDoses to missed-dose computation regardless of stock", () => {
 		const obsolete = { ...meds[0], id: 22, isObsolete: true };
 		mockUseMedications.mockReturnValue({ ...mockUseMedications(), meds: [...meds, obsolete] });
 		const takenDoses = new Set(["11-0-1", "22-0-1", "legacy-dose"]);
@@ -360,12 +360,7 @@ describe("useAppContext", () => {
 		);
 		expect(result.current.coverageByMed.Aspirin).toEqual(entry);
 		expect(result.current.depletionByMed.Aspirin).toBe(456);
-		expect(mockComputeMissedPastDoseIds).toHaveBeenLastCalledWith(
-			[],
-			meds,
-			new Set(["22-0-1", "legacy-dose"]),
-			mockUseDoses().dismissedDoses
-		);
+		expect(mockComputeMissedPastDoseIds).toHaveBeenLastCalledWith([], meds, takenDoses, mockUseDoses().dismissedDoses);
 		// People include obsolete medications, as before.
 		expect(result.current.existingPeople).toEqual(["Anna", "Max"]);
 	});

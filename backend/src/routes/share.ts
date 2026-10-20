@@ -8,6 +8,7 @@ import { getAnonymousUserId, requireAuth } from "../plugins/auth.js";
 import { env } from "../plugins/env.js";
 import { filterScheduledDoseRows, getActiveAsNeededStockEffectsMilli } from "../services/as-needed-intakes-service.js";
 import { buildSharedMedicationOverview } from "../services/coverage.js";
+import { computeMedicationCurrentStock } from "../services/current-stock.js";
 import {
 	getPublicShareContext,
 	getPublicShareLanguage,
@@ -225,7 +226,7 @@ async function getActiveMedicationsForPerson(userId: number, takenBy: string): P
 	});
 }
 
-function toSharedScheduleMedication(medication: MedicationRow, shareTakenBy: string) {
+function toSharedScheduleMedication(medication: MedicationRow, shareTakenBy: string, currentStock?: number | null) {
 	const schedule = normalizeMedicationSchedule(medication);
 	const intakes = scopeIntakesToTakenBy(schedule.intakes, schedule.takenBy, shareTakenBy);
 	const blisters = intakes.map((intake) => ({
@@ -261,6 +262,7 @@ function toSharedScheduleMedication(medication: MedicationRow, shareTakenBy: str
 		updatedAt: medication.updatedAt,
 		lastStockCorrectionAt: medication.lastStockCorrectionAt?.getTime() ?? null,
 		stockAdjustment: medication.stockAdjustment ?? 0,
+		currentStock: currentStock ?? null,
 	};
 }
 
@@ -354,19 +356,30 @@ export async function shareRoutes(app: FastifyInstance) {
 			const [owner] = await db.select({ username: users.username }).from(users).where(eq(users.id, share.userId));
 
 			const meds = await getActiveMedicationsForPerson(share.userId, share.takenBy);
-			const medicationsWithBlisters = meds.map((medication) => toSharedScheduleMedication(medication, share.takenBy));
 			const shareMedicationOverview = settings?.shareMedicationOverview ?? false;
-			const asNeededStockEffectsMilli = shareMedicationOverview
-				? await getActiveAsNeededStockEffectsMilli(
-						db,
-						share.userId,
-						meds.map((medication) => medication.id)
-					)
-				: new Map<number, number>();
-			const doseRows = shareMedicationOverview
-				? await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId))
-				: [];
+
+			// Always fetch dose data for authoritative currentStock calculation
+			// (independent of shareMedicationOverview privacy setting)
+			const asNeededStockEffectsMilli = await getActiveAsNeededStockEffectsMilli(
+				db,
+				share.userId,
+				meds.map((medication) => medication.id)
+			);
+			const doseRows = await db.select().from(doseTracking).where(eq(doseTracking.userId, share.userId));
 			const scheduledDoses = await filterScheduledDoseRows(db, share.userId, doseRows);
+			const stockCalculationMode = (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic";
+
+			// Calculate authoritative currentStock for each medication
+			const medicationsWithBlisters = meds.map((medication) => {
+				const currentStock = computeMedicationCurrentStock({
+					medication,
+					doses: scheduledDoses,
+					stockCalculationMode,
+					asNeededStockEffectMilli: asNeededStockEffectsMilli.get(medication.id) ?? 0,
+				});
+				return toSharedScheduleMedication(medication, share.takenBy, currentStock);
+			});
+
 			const medicationOverview = shareMedicationOverview
 				? buildSharedMedicationOverview({
 						medications: meds,

@@ -892,6 +892,8 @@
       "futureSkip": "Las tomas futuras aún no se pueden omitir.",
       "alreadyTakenMainApp": "Esta toma ya fue marcada como tomada en la aplicación principal."
     },
+    "outOfStockContactOrganizer": "Este medicamento está agotado. Contacta con {{organizer}} para reponerlo.",
+    "genericOrganizer": "el organizador",
     "journalNotesEnabled": "Vista/edición de registros habilitada",
     "expiryNever": "Nunca caduca",
     "neverExpiresWarning": "Los enlaces sin caducidad permanecen válidos hasta que los revoques o regeneres.",

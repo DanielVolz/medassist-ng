@@ -373,6 +373,7 @@ type SharedMedication = {
 	updatedAt?: string | number | null; // For filtering out doses from previous schedule configurations
 	lastStockCorrectionAt?: number | null; // Timestamp in ms for stock correction cutoff
 	stockAdjustment?: number; // Manual stock adjustment
+	currentStock?: number | null; // Authoritative backend stock (null if unavailable)
 };
 
 export type SharedScheduleData = {

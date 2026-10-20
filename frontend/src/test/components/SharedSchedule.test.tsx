@@ -3,6 +3,12 @@ import { useTranslation } from "react-i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockSharedScheduleRead, renderSharedSchedule } from "../helpers/shared-schedule";
 
+const { mockShowFeedback } = vi.hoisted(() => ({ mockShowFeedback: vi.fn() }));
+vi.mock("../../context/FeedbackContext", () => ({
+	useFeedback: () => ({ showFeedback: mockShowFeedback, dismissFeedback: () => {}, clearFeedback: () => {} }),
+	FeedbackProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 function createSharedData() {
 	return {
 		sharedBy: "Owner",
@@ -891,6 +897,162 @@ describe("SharedSchedule", () => {
 				expect.objectContaining({ doseId: sharedData.automaticDoseId, takenSource: "manual" }),
 			]);
 			expect(document.querySelector(".day-block.today")).toHaveClass("all-taken");
+		});
+	});
+
+	it("authoritative currentStock=0 disables Take and marks day stock-danger even with positive base stock", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		(sharedData as Record<string, unknown>).shareMedicationOverview = false;
+		(sharedData as Record<string, unknown>).medicationOverview = null;
+		(sharedData.medications[0] as Record<string, unknown>).currentStock = 0;
+
+		mockSharedScheduleRead(sharedData);
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			const takeButton = screen.getByRole("button", { name: "dose.take" });
+			expect(takeButton).toBeDisabled();
+		});
+		expect(document.querySelector(".time-row.med-empty")).toBeInTheDocument();
+		expect(document.querySelector(".dose-item.med-empty")).toBeInTheDocument();
+		expect(screen.getByText("status.outOfStock")).toHaveClass("tag", "danger");
+		expect(document.querySelector(".day-block.today.stock-danger")).toBeInTheDocument();
+	});
+
+	it("authoritative currentStock>0 enables Take and suppresses empty styling when local data appears zero", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		(sharedData as Record<string, unknown>).shareMedicationOverview = false;
+		(sharedData as Record<string, unknown>).medicationOverview = null;
+		sharedData.medications[0].packCount = 0;
+		sharedData.medications[0].looseTablets = 0;
+		(sharedData.medications[0] as Record<string, unknown>).currentStock = 5;
+
+		mockSharedScheduleRead(sharedData);
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: "dose.take" })).toBeEnabled();
+		});
+		expect(document.querySelector(".time-row.med-empty")).not.toBeInTheDocument();
+		expect(screen.queryByText("status.outOfStock")).not.toBeInTheDocument();
+	});
+
+	it.each([
+		{ label: "named organizer", sharedBy: "Dr. Smith" },
+		{ label: "blank organizer", sharedBy: "  " },
+		{ label: "null organizer", sharedBy: null as string | null },
+	])("OUT_OF_STOCK rejection shows contact-organizer feedback ($label)", async ({ sharedBy }) => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		(sharedData as Record<string, unknown>).sharedBy = sharedBy;
+		mockShowFeedback.mockClear();
+
+		let postCount = 0;
+		(globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string, init?: RequestInit) => {
+			const method = init?.method ?? "GET";
+			if (url === "/api/share/token-123/doses" && method === "GET") {
+				return Promise.resolve({ ok: true, json: () => Promise.resolve({ doses: [] }) });
+			}
+			if (url === "/api/share/token-123") {
+				const refreshed = { ...sharedData };
+				if (postCount > 0) {
+					(refreshed.medications[0] as Record<string, unknown>).currentStock = 0;
+				}
+				return Promise.resolve({ ok: true, json: () => Promise.resolve(refreshed) });
+			}
+			if (url === "/api/share/token-123/doses" && method === "POST") {
+				postCount++;
+				return Promise.resolve({
+					ok: false,
+					status: 409,
+					json: () => Promise.resolve({ error: "Medication is out of stock", code: "OUT_OF_STOCK" }),
+				});
+			}
+			return Promise.reject(new Error(`Unexpected request: ${method} ${url}`));
+		});
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: "dose.take" })).toBeEnabled();
+		});
+
+		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
+
+		await waitFor(() => {
+			expect(mockShowFeedback).toHaveBeenCalledWith(
+				expect.objectContaining({ tone: "error", message: "share.outOfStockContactOrganizer" })
+			);
+		});
+
+		await waitFor(() => {
+			expect(screen.getByRole("button", { name: "dose.take" })).toBeDisabled();
+		});
+	});
+
+	it("keeps undo available when stock is zero", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		(sharedData.medications[0] as Record<string, unknown>).currentStock = 0;
+		const { fetchMock } = createSharedDoseFetchMock({
+			sharedData,
+			initialDoses: [{ doseId: sharedData.automaticDoseId, takenSource: "manual" }],
+		});
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(document.querySelector(".day-block.today")).toBeInTheDocument();
+		});
+
+		const dayDivider = document.querySelector(".day-block.today .day-divider.clickable");
+		if (dayDivider && document.querySelector(".day-block.today.collapsed")) {
+			fireEvent.click(dayDivider as HTMLElement);
+		}
+
+		const undoButton = await screen.findByRole("button", { name: "dose.undoAction" });
+		expect(undoButton).not.toBeDisabled();
+	});
+
+	it("keeps skip available and functional when stock is zero", async () => {
+		const referenceNow = new Date();
+		referenceNow.setHours(12, 0, 0, 0);
+		vi.spyOn(Date, "now").mockReturnValue(referenceNow.getTime());
+		const sharedData = createSharedDataWithTodayDose(referenceNow);
+		(sharedData.medications[0] as Record<string, unknown>).currentStock = 0;
+		const { fetchMock, requests } = createSharedDoseFetchMock({ sharedData });
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+		renderSharedSchedule("/share/token-123");
+
+		await waitFor(() => {
+			expect(document.querySelector(".time-row.med-empty")).toBeInTheDocument();
+		});
+
+		const skipButton = screen.getByRole("button", { name: "dose.skip" });
+		expect(skipButton).not.toBeDisabled();
+
+		fireEvent.click(skipButton);
+
+		await waitFor(() => {
+			expect(requests).toContainEqual({
+				url: "/api/share/token-123/doses/skip",
+				method: "POST",
+				body: { doseId: sharedData.automaticDoseId },
+			});
 		});
 	});
 });

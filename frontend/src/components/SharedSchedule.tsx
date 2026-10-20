@@ -372,14 +372,36 @@ export function SharedSchedule() {
 		}
 	}, [data?.takenBy, token]);
 
+	const refreshSharedData = useCallback(async () => {
+		if (!token) return;
+		if (mutationInFlightRef.current > 0) return;
+		try {
+			const res = await fetch(`/api/share/${token}`);
+			if (res.ok) {
+				if (mutationInFlightRef.current > 0) return;
+				const json = (await res.json()) as SharedScheduleData;
+				setData((prev) => {
+					if (!prev) return prev;
+					return { ...json, language: prev.language };
+				});
+			}
+		} catch {
+			// Keep the current shared state on transient read errors.
+		}
+	}, [token]);
+
 	useEffect(() => {
 		if (!token) return;
 		loadTakenDoses();
+		refreshSharedData();
 
 		// Poll for updates every 5 seconds (real-time sync with dashboard)
-		const interval = setInterval(loadTakenDoses, 5000);
+		const interval = setInterval(() => {
+			loadTakenDoses();
+			refreshSharedData();
+		}, 5000);
 		return () => clearInterval(interval);
-	}, [loadTakenDoses, token]);
+	}, [loadTakenDoses, refreshSharedData, token]);
 
 	async function markDoseTaken(doseId: string) {
 		if (data?.allowMarkTaken === false) {
@@ -417,9 +439,11 @@ export function SharedSchedule() {
 			});
 			if (!response.ok) {
 				try {
-					const data = (await response.json()) as { code?: string };
-					if (data.code === "OUT_OF_STOCK") {
-						showFeedback({ message: t("common.outOfStockTakeBlocked"), tone: "error" });
+					const respData = (await response.json()) as { code?: string };
+					if (respData.code === "OUT_OF_STOCK") {
+						const organizerRaw = (data?.sharedBy ?? "").trim();
+						const organizer = organizerRaw.length > 0 ? organizerRaw : t("share.genericOrganizer");
+						showFeedback({ message: t("share.outOfStockContactOrganizer", { organizer }), tone: "error" });
 					}
 				} catch {
 					// Ignore JSON parsing errors and fall back to the optimistic rollback only.
@@ -456,6 +480,7 @@ export function SharedSchedule() {
 		} finally {
 			mutationInFlightRef.current--;
 			loadTakenDoses();
+			refreshSharedData();
 		}
 	}
 
@@ -525,6 +550,7 @@ export function SharedSchedule() {
 		} finally {
 			mutationInFlightRef.current--;
 			loadTakenDoses();
+			refreshSharedData();
 		}
 	}
 
@@ -569,6 +595,7 @@ export function SharedSchedule() {
 		} finally {
 			mutationInFlightRef.current--;
 			loadTakenDoses();
+			refreshSharedData();
 		}
 	}
 
@@ -601,6 +628,7 @@ export function SharedSchedule() {
 		} finally {
 			mutationInFlightRef.current--;
 			loadTakenDoses();
+			refreshSharedData();
 		}
 	}
 
@@ -1117,6 +1145,12 @@ export function SharedSchedule() {
 		return emptyNames;
 	}, [data?.medicationOverview]);
 
+	function isMedicationEmpty(medName: string): boolean {
+		const stock = data?.medications.find((med) => getMedDisplayName(med) === medName)?.currentStock;
+		if (typeof stock === "number" && Number.isFinite(stock)) return stock <= 0;
+		return emptyByOverviewName.has(medName) || (coverageByMed[medName]?.medsLeft ?? 1) <= 0;
+	}
+
 	const isDoseTakenForDisplay = useCallback((doseId: string) => takenDoses.has(doseId), [takenDoses]);
 
 	const showMedicationOverview = data?.shareMedicationOverview === true && data?.medicationOverview !== null;
@@ -1354,7 +1388,7 @@ export function SharedSchedule() {
 										return (
 											<div
 												key={day.dateStr}
-												className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allReallyTaken ? "all-taken" : pastMissedClass}`}
+												className={`day-block past ${isCollapsed ? "collapsed" : ""} ${allReallyTaken ? "all-taken" : pastMissedClass} ${day.meds.some((item) => isMedicationEmpty(item.medName)) ? "stock-danger" : ""}`}
 											>
 												<div
 													className="day-divider clickable"
@@ -1389,9 +1423,7 @@ export function SharedSchedule() {
 													day.meds.map((item) => {
 														const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 														const medCoverage = coverageByMed[item.medName];
-														const isEmpty =
-															emptyByOverviewName.has(item.medName) ||
-															(medCoverage ? medCoverage.medsLeft <= 0 : false);
+														const isEmpty = isMedicationEmpty(item.medName);
 														const medOverview = medicationOverviewByName.get(item.medName);
 														let stockStatus = null;
 														if (!isEmpty && sharedStockThresholds) {
@@ -1576,7 +1608,7 @@ export function SharedSchedule() {
 										return (
 											<div
 												key={day.dateStr}
-												className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} today`}
+												className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} today ${day.meds.some((item) => isMedicationEmpty(item.medName)) ? "stock-danger" : ""}`}
 											>
 												<div
 													className="day-divider clickable"
@@ -1601,9 +1633,7 @@ export function SharedSchedule() {
 													day.meds.map((item) => {
 														const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 														const medCoverage = coverageByMed[item.medName];
-														const isEmpty =
-															emptyByOverviewName.has(item.medName) ||
-															(medCoverage ? medCoverage.medsLeft <= 0 : false);
+														const isEmpty = isMedicationEmpty(item.medName);
 														const medOverview = medicationOverviewByName.get(item.medName);
 														let stockStatus = null;
 														if (!isEmpty && sharedStockThresholds) {
@@ -1772,7 +1802,7 @@ export function SharedSchedule() {
 										return (
 											<div
 												key={day.dateStr}
-												className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""}`}
+												className={`day-block ${isCollapsed ? "collapsed" : ""} ${allDayTaken ? "all-taken" : ""} ${day.meds.some((item) => isMedicationEmpty(item.medName)) ? "stock-danger" : ""}`}
 											>
 												<div
 													className="day-divider clickable"
@@ -1797,9 +1827,7 @@ export function SharedSchedule() {
 													day.meds.map((item) => {
 														const med = data.medications.find((m) => getMedDisplayName(m) === item.medName);
 														const medCoverage = coverageByMed[item.medName];
-														const isEmpty =
-															emptyByOverviewName.has(item.medName) ||
-															(medCoverage ? medCoverage.medsLeft <= 0 : false);
+														const isEmpty = isMedicationEmpty(item.medName);
 														const medOverview = medicationOverviewByName.get(item.medName);
 														let stockStatus = null;
 														if (!isEmpty && sharedStockThresholds) {

@@ -633,6 +633,8 @@
       "futureSkip": "As ingestões futuras ainda não podem ser ignoradas.",
       "alreadyTakenMainApp": "Essa ingestão já estava marcada como realizada no aplicação principal."
     },
+    "outOfStockContactOrganizer": "Este medicamento está esgotado. Contacte {{organizer}} para reabastecer.",
+    "genericOrganizer": "o organizador",
     "journalNotesEnabled": "Visualização/edição do diário ativada",
     "expiryNever": "Nunca expira",
     "neverExpiresWarning": "Os links que nunca expiram permanecem válidos até que você os revogue ou regenere.",

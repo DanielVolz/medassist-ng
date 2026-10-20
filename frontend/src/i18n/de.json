@@ -892,6 +892,8 @@
       "futureSkip": "Zukünftige Einnahmen können noch nicht übersprungen werden.",
       "alreadyTakenMainApp": "Diese Einnahme wurde bereits in der Haupt-App als eingenommen markiert."
     },
+    "outOfStockContactOrganizer": "Dieses Medikament ist leer. Bitte kontaktiere {{organizer}} für eine Nachfüllung.",
+    "genericOrganizer": "die verantwortliche Person",
     "journalNotesEnabled": "Journal anzeigen/bearbeiten erlaubt",
     "expiryNever": "Läuft nicht ab",
     "neverExpiresWarning": "Links ohne Ablauf bleiben gültig, bis du sie widerrufst oder neu generierst.",

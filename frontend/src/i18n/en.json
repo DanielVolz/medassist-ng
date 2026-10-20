@@ -892,6 +892,8 @@
       "futureSkip": "Future intakes cannot be skipped yet.",
       "alreadyTakenMainApp": "This intake was already marked as taken in the main app."
     },
+    "outOfStockContactOrganizer": "This medication is out of stock. Please contact {{organizer}} for a refill.",
+    "genericOrganizer": "the organizer",
     "journalNotesEnabled": "Journal view/edit enabled",
     "expiryNever": "Never expires",
     "neverExpiresWarning": "Never-expiring links stay valid until you revoke or regenerate them.",

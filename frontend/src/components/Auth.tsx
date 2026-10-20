@@ -156,9 +156,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 		const refreshInterval = setInterval(
 			async () => {
-				const success = await tryRefreshToken();
-				if (!success) {
-					// Refresh failed - check if user is still valid
+				const result = await tryRefreshToken();
+				if (result !== "ok") {
+					// Refresh failed or token expired - check if user is still valid
 					await refreshUser();
 				}
 			},
@@ -222,8 +222,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			} else if (res.status === 401) {
 				// Access token expired - try to refresh it
 				log.info("[Auth] Access token invalid, attempting refresh", { correlationId });
-				const refreshed = await tryRefreshToken();
-				if (refreshed) {
+				const result = await tryRefreshToken();
+				if (result === "ok") {
 					// Retry /auth/me with new token
 					const retry = withCorrelation({ credentials: "include" }, "fe-auth-me-retry");
 					const retryRes = await fetch("/api/auth/me", retry.init);
@@ -239,9 +239,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 						return;
 					}
 				}
-				log.debug("[Auth] Session refresh unavailable, clearing local user state", { correlationId });
-				setUser(null);
-				setSessionExpired(hadAuthenticatedSession.current);
+				if (result === "expired") {
+					// Refresh token genuinely invalid/expired - sign out with a notice.
+					log.debug("[Auth] Session refresh rejected as expired, clearing local user state", {
+						correlationId,
+					});
+					setUser(null);
+					setSessionExpired(hadAuthenticatedSession.current);
+				} else {
+					// Transient failure after retries - the session may still be valid.
+					// Clear local user state but do NOT show "Session expired".
+					log.warn("[Auth] Session refresh failed transiently; not marking session expired", {
+						correlationId,
+					});
+					setUser(null);
+				}
 			} else {
 				log.warn("[Auth] Unexpected /auth/me response", { status: res.status, correlationId });
 				setUser(null);
@@ -252,29 +264,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		}
 	}
 
-	// Try to refresh the access token using the refresh token
-	async function tryRefreshToken(): Promise<boolean> {
-		try {
-			const { correlationId, init } = withCorrelation(
-				{
-					method: "POST",
-					credentials: "include",
-				},
-				"fe-auth-refresh"
-			);
-			const res = await fetch("/api/auth/refresh", init);
-			if (!res.ok) {
-				if (res.status === 401) {
-					log.debug("[Auth] Token refresh rejected (unauthenticated)", { status: res.status, correlationId });
-				} else {
-					log.warn("[Auth] Token refresh rejected", { status: res.status, correlationId });
-				}
+	// Try to refresh the access token using the refresh token.
+	// Distinguishes a real token expiry (HTTP 401) from a transient failure
+	// (network error or 5xx) so a brief backend restart/network blip does not
+	// incorrectly throw the user out to a "Session expired" screen.
+	async function tryRefreshToken(): Promise<"ok" | "expired" | "transient"> {
+		const maxAttempts = 3;
+		const retryDelaysMs = [500, 1500];
+
+		for (let attempt = 0; attempt < maxAttempts; attempt++) {
+			let res: Response | undefined;
+			let correlationId: string | null = null;
+			try {
+				const correlated = withCorrelation(
+					{
+						method: "POST",
+						credentials: "include",
+					},
+					"fe-auth-refresh"
+				);
+				correlationId = correlated.correlationId;
+				res = await fetch("/api/auth/refresh", correlated.init);
+			} catch (error) {
+				log.error("[Auth] Token refresh request failed", { error, attempt: attempt + 1 });
 			}
-			return res.ok;
-		} catch (error) {
-			log.error("[Auth] Token refresh request failed", { error });
-			return false;
+
+			// fetch did not return a valid Response (e.g. an exhausted test stub).
+			// Treat as transient but do NOT retry, to avoid leaking timers/requests.
+			if (!res) {
+				log.warn("[Auth] Token refresh returned no response", { attempt: attempt + 1, correlationId });
+				return "transient";
+			}
+			if (res.ok) {
+				return "ok";
+			}
+			if (res.status === 401) {
+				log.debug("[Auth] Token refresh rejected (unauthenticated)", {
+					status: res.status,
+					correlationId,
+				});
+				return "expired";
+			}
+			log.warn("[Auth] Token refresh rejected (transient)", {
+				status: res.status,
+				correlationId,
+				attempt: attempt + 1,
+			});
+
+			if (attempt < maxAttempts - 1) {
+				await new Promise((resolve) => setTimeout(resolve, retryDelaysMs[attempt] ?? 1500));
+			}
 		}
+
+		return "transient";
 	}
 
 	async function login(username: string, password: string, rememberMe: boolean = false) {
@@ -485,8 +527,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			// If 401 and not already a refresh/login request, try to refresh token
 			let retried = false;
 			if (res.status === 401 && !path.startsWith("/api/auth/")) {
-				const refreshed = await tryRefreshToken();
-				if (refreshed) {
+				const result = await tryRefreshToken();
+				if (result === "ok") {
 					// Retry the original request with new token
 					retried = true;
 					try {
@@ -503,10 +545,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					if (res.ok) {
 						setSessionExpired(false);
 					}
-				} else {
-					// Refresh failed - user needs to login again
+				} else if (result === "expired") {
+					// Refresh token genuinely invalid/expired - user needs to login again.
 					setUser(null);
 					setSessionExpired(hadAuthenticatedSession.current);
+				} else {
+					// Transient refresh failure after retries - the session may still be
+					// valid; do NOT mark it expired, so a reload can recover cleanly.
+					log.warn("[Auth] API refresh failed transiently; not marking session expired", {
+						path,
+						correlationId,
+					});
+					setUser(null);
 				}
 			}
 

@@ -168,6 +168,57 @@ describe("MobileEditModal", () => {
 		expect(screen.getByRole("button", { name: "common.close" })).toBeInTheDocument();
 	});
 
+	it("moves through every mobile editor section for modified arrow-key events", async () => {
+		render(<MobileEditModal {...defaultProps} />);
+
+		const tablist = screen.getByRole("tablist", { name: "form.sections.ariaLabel" });
+		const tabs = within(tablist).getAllByRole("tab");
+		const panels = Array.from(document.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+		const sectionNames = ["general", "stock", "schedule", "prescription"];
+
+		expect(tabs).toHaveLength(4);
+		expect(panels).toHaveLength(4);
+		expect(tabs.map((tab) => tab.textContent)).toEqual(sectionNames.map((name) => `form.sections.${name}`));
+
+		const expectActiveSection = async (activeIndex: number) => {
+			await waitFor(() => {
+				expect(tabs[activeIndex]).toHaveFocus();
+				expect(tabs[activeIndex]).toHaveAttribute("aria-selected", "true");
+				expect(tabs[activeIndex]).toHaveAttribute("tabindex", "0");
+			});
+
+			for (const [index, tab] of tabs.entries()) {
+				expect(tab).toHaveAttribute("aria-selected", index === activeIndex ? "true" : "false");
+				expect(tab).toHaveAttribute("tabindex", index === activeIndex ? "0" : "-1");
+
+				const panel = panels.find((candidate) => candidate.id === tab.getAttribute("aria-controls"));
+				expect(panel).toHaveAttribute("aria-labelledby", tab.id);
+				expect(panel).toHaveAttribute("aria-hidden", index === activeIndex ? "false" : "true");
+				if (index === activeIndex) {
+					expect(panel).not.toHaveAttribute("inert");
+				} else {
+					expect(panel).toHaveAttribute("inert");
+				}
+			}
+		};
+
+		let currentIndex = 0;
+		tabs[currentIndex].focus();
+		await expectActiveSection(currentIndex);
+
+		// Synthetic key events validate the app handler only; they do not emulate VoiceOver.
+		for (const [key, expectedIndexes] of [
+			["ArrowRight", [1, 2, 3, 0]],
+			["ArrowLeft", [3, 2, 1, 0]],
+		] as const) {
+			for (const expectedIndex of expectedIndexes) {
+				fireEvent.keyDown(tabs[currentIndex], { key, ctrlKey: true, shiftKey: true });
+				currentIndex = expectedIndex;
+				await expectActiveSection(currentIndex);
+			}
+		}
+	});
+
 	it("calls onClose when back button is clicked", () => {
 		const onClose = vi.fn();
 		render(<MobileEditModal {...defaultProps} onClose={onClose} />);

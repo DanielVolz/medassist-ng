@@ -3,6 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import { MedicationListSection } from "../../components/medications/MedicationListSection";
 import type { Medication } from "../../types";
 
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({
+		t: (key: string, options?: { count?: number; name?: string }) => {
+			if (options?.name) return `${key} ${options.name}`;
+			if (options?.count !== undefined) return `${key}_${options.count}`;
+			return key;
+		},
+	}),
+}));
+
 function createMedication(overrides: Partial<Medication>): Medication {
 	return {
 		id: 1,
@@ -28,6 +38,7 @@ function createMedication(overrides: Partial<Medication>): Medication {
 
 function renderSection(props: {
 	orderedMeds: Medication[];
+	obsoleteMeds?: Medication[];
 	onImagePreview?: (med: Medication) => void;
 	canRecordNow?: (med: Medication) => boolean;
 	onRecordNow?: (med: Medication) => void;
@@ -35,7 +46,7 @@ function renderSection(props: {
 	return render(
 		<MedicationListSection
 			orderedMeds={props.orderedMeds}
-			obsoleteMeds={[]}
+			obsoleteMeds={props.obsoleteMeds ?? []}
 			editingId={null}
 			showObsolete={false}
 			coverageByMed={{}}
@@ -58,6 +69,40 @@ function renderSection(props: {
 }
 
 describe("MedicationListSection", () => {
+	it("exposes medication rows as named list items with unique action names", () => {
+		renderSection({
+			orderedMeds: [
+				createMedication({ id: 1, name: "Aspirin", imageUrl: null }),
+				createMedication({ id: 2, name: "Ibuprofen", imageUrl: null }),
+			],
+		});
+
+		const medicationList = screen.getByRole("list", { name: "medications.list.title" });
+		const rows = screen.getAllByRole("listitem");
+		expect(medicationList).toContainElement(rows[0]);
+		expect(rows).toHaveLength(2);
+		expect(rows[0]).toHaveAccessibleName("Aspirin");
+		expect(rows[1]).toHaveAccessibleName("Ibuprofen");
+		expect(screen.getByRole("button", { name: "medications.list.actionEdit Aspirin" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "medications.list.actionEdit Ibuprofen" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "medications.list.actionDelete Aspirin" })).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "medications.list.actionDelete Ibuprofen" })).toBeInTheDocument();
+	});
+
+	it("labels and controls the collapsed obsolete medication list", () => {
+		renderSection({
+			orderedMeds: [],
+			obsoleteMeds: [createMedication({ id: 3, name: "Old medication", isObsolete: true })],
+		});
+
+		const toggle = screen.getByRole("button", { name: "medications.list.obsoleteTitle_1" });
+		const obsoleteList = document.getElementById("obsolete-medications-list");
+		expect(toggle).toHaveAttribute("aria-expanded", "false");
+		expect(toggle).toHaveAttribute("aria-controls", "obsolete-medications-list");
+		expect(obsoleteList).toHaveAttribute("hidden");
+		expect(toggle.querySelector("span")).toHaveAttribute("aria-hidden", "true");
+	});
+
 	it("shows no regular schedule when intakes are explicitly empty", () => {
 		renderSection({
 			orderedMeds: [
@@ -81,7 +126,7 @@ describe("MedicationListSection", () => {
 			onRecordNow,
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "medications.list.actionRecordNow" }));
+		fireEvent.click(screen.getByRole("button", { name: "medications.list.actionRecordNow Photo Med" }));
 		expect(onRecordNow).toHaveBeenCalledWith(eligible);
 		expect(screen.getAllByText("form.blisters.noRegularSchedule")).toHaveLength(1);
 	});
@@ -91,15 +136,16 @@ describe("MedicationListSection", () => {
 		const medication = createMedication({ id: 1, name: "Photo Med", imageUrl: "photo.webp" });
 
 		renderSection({ orderedMeds: [medication], onImagePreview });
-		const imagePreviewButton = screen.getByRole("button", { name: "medications.list.actionPreviewImage" });
-		fireEvent.click(imagePreviewButton);
+		fireEvent.click(screen.getByRole("button", { name: "medications.list.actionPreviewImage Photo Med" }));
 
-		expect(onImagePreview).toHaveBeenCalledWith(medication, imagePreviewButton);
+		expect(onImagePreview).toHaveBeenCalledWith(medication, expect.any(HTMLButtonElement));
 	});
 
 	it("does not make medication avatars clickable when no image is available", () => {
 		renderSection({ orderedMeds: [createMedication({ id: 2, name: "No Photo Med", imageUrl: null })] });
 
-		expect(screen.queryByRole("button", { name: "No Photo Med" })).not.toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: "medications.list.actionPreviewImage No Photo Med" })
+		).not.toBeInTheDocument();
 	});
 });

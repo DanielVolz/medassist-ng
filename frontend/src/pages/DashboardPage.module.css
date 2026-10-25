@@ -1,10 +1,59 @@
 .mainSections {
 	display: flex;
 	flex-direction: column;
+	--dashboard-warning-text: #f3d89e;
+}
+
+:global([data-theme="light"]) .mainSections {
+	--dashboard-warning-text: #694804;
+}
+
+.overviewSection :global(.warning-text) {
+	color: var(--dashboard-warning-text);
 }
 
 .schedulesSection {
 	overflow: visible;
+}
+
+.schedulesSection :global(.day-block.past) {
+	opacity: 1;
+}
+
+.schedulesSection :global(.dose-item.future) {
+	opacity: 1;
+	border-style: dashed;
+}
+
+.schedulesSection :global(.dose-item.all-taken) {
+	opacity: 1;
+}
+
+.schedulesSection :global(.dose-person.taken .mantine-Button-root),
+.schedulesSection :global(.dose-person.skipped .mantine-Button-root) {
+	transition: none;
+}
+
+:global([data-theme="light"]) .schedulesSection :global(.day-block.past-missed .day-divider),
+:global([data-theme="light"]) .schedulesSection :global(.day-block.stock-warning:not(.all-taken) .day-divider),
+:global([data-theme="light"]) .schedulesSection :global(.time-row.med-low .med-name-text),
+:global([data-theme="light"]) .schedulesSection :global(.time-row.med-low .tag.subtle),
+:global([data-theme="light"]) .schedulesSection :global(.tag.warning) {
+	color: var(--dashboard-warning-text);
+}
+
+.schedulesSection :global(.day-divider.clickable:hover) {
+	opacity: 1;
+}
+
+.schedulesSection :global(.dose-item.all-taken .dose-time),
+.schedulesSection :global(.dose-item.all-taken .dose-usage),
+.schedulesSection :global(.dose-item.overdue .dose-usage) {
+	color: var(--text-primary);
+}
+
+.schedulesSection :global(.dose-item.overdue .dose-time) {
+	color: var(--dashboard-warning-text);
 }
 
 .mainSectionsSwapped .schedulesSection {

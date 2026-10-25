@@ -1,6 +1,9 @@
 import { execFileSync, spawn } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { lookup } from "node:dns/promises";
+import { isIPv4 } from "node:net";
+import { networkInterfaces } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { demoMedications } from "./seed.mjs";
@@ -14,9 +17,10 @@ const seedMarker = resolve(sandboxDir, "seed-complete.json");
 const backendPort = 5177;
 const frontendPort = 5176;
 const backendUrl = `http://127.0.0.1:${backendPort}`;
-const appUrl = `http://127.0.0.1:${frontendPort}/dashboard`;
 const requireBackend = createRequire(resolve(root, "backend/package.json"));
+const dotenv = requireBackend("dotenv");
 const sharp = requireBackend("sharp");
+const smtpEnvKeys = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_TOKEN", "SMTP_FROM", "SMTP_SECURE"];
 const children = new Set();
 let lockFd;
 let stopping = false;
@@ -36,12 +40,75 @@ function runBuild() {
 	}
 }
 
-function minimalEnv(overrides = {}) {
+function minimalEnv(overrides = {}, inheritedEnv = process.env) {
 	const env = {};
 	for (const key of ["PATH", "HOME", "TMPDIR", "USER", "LOGNAME"]) {
-		if (process.env[key]) env[key] = process.env[key];
+		if (inheritedEnv[key]) env[key] = inheritedEnv[key];
 	}
 	return { ...env, ...overrides };
+}
+
+function loadSandboxSmtpEnv(projectRoot) {
+	const envPath = resolve(projectRoot, ".env");
+	if (!existsSync(envPath)) return {};
+
+	const parsed = dotenv.parse(readFileSync(envPath));
+	return Object.fromEntries(
+		smtpEnvKeys
+			.filter((key) => parsed[key] !== undefined && parsed[key] !== "")
+			.map((key) => [key, parsed[key]])
+	);
+}
+
+export async function resolveSandboxNetwork(projectRoot = root, dependencies = {}) {
+	const loopback = { host: "127.0.0.1", publicAppUrl: undefined };
+	const envPath = resolve(projectRoot, ".env");
+	if (!existsSync(envPath)) return loopback;
+	const configuredUrl = dotenv.parse(readFileSync(envPath)).PUBLIC_APP_URL;
+	if (!configuredUrl) return loopback;
+
+	try {
+		const url = new URL(configuredUrl);
+		if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return loopback;
+		const addresses = await (dependencies.lookup ?? lookup)(url.hostname, { all: true });
+		const interfaces = (dependencies.networkInterfaces ?? networkInterfaces)();
+		const localAddresses = new Set(
+			Object.values(interfaces).flat().filter((entry) => entry && !entry.internal).map((entry) => entry.address)
+		);
+		const isLocalPrivate = ({ address }) => {
+			if (!isIPv4(address) || !localAddresses.has(address)) return false;
+			const [first, second] = address.split(".").map(Number);
+			return first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+		};
+		if (addresses.length === 0 || !addresses.every(isLocalPrivate)) return loopback;
+		if (addresses.some(({ address }) => address !== addresses[0].address)) return loopback;
+		return { host: addresses[0].address, publicAppUrl: `http://${url.hostname}:${frontendPort}/` };
+	} catch {
+		return loopback;
+	}
+}
+
+export function buildSandboxBackendEnv(projectRoot = root, inheritedEnv = process.env, network = {}) {
+	const dataDir = resolve(projectRoot, ".ui-dev", "data");
+	return minimalEnv(
+		{
+			NODE_ENV: "development",
+			AUTH_ENABLED: "false",
+			ALLOW_UNAUTHENTICATED: "false",
+			UI_SANDBOX_LAUNCHER: "1",
+			PORT: String(backendPort),
+			CORS_ORIGINS: `http://127.0.0.1:${frontendPort}`,
+			DATA_DIR: dataDir,
+			DOTENV_PATH: "/dev/null",
+			MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: "false",
+			...loadSandboxSmtpEnv(projectRoot),
+			...(network.publicAppUrl ? {
+				PUBLIC_APP_URL: network.publicAppUrl,
+				CORS_ORIGINS: `http://127.0.0.1:${frontendPort},${new URL(network.publicAppUrl).origin}`,
+			} : {}),
+		},
+		inheritedEnv
+	);
 }
 
 function startNode(args, options, label) {
@@ -228,17 +295,14 @@ async function start() {
 	runBuild();
 	assertRunning();
 
-	const safeEnv = minimalEnv({
-		NODE_ENV: "development",
-		AUTH_ENABLED: "false",
-		ALLOW_UNAUTHENTICATED: "false",
-		UI_SANDBOX_LAUNCHER: "1",
-		PORT: String(backendPort),
-		CORS_ORIGINS: `http://127.0.0.1:${frontendPort}`,
-		DATA_DIR: dataDir,
-		DOTENV_PATH: "/dev/null",
-		MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: "false",
-	});
+	const network = await resolveSandboxNetwork(root);
+	const appUrl = new URL("dashboard", network.publicAppUrl ?? `http://127.0.0.1:${frontendPort}/`).href;
+	console.log(network.publicAppUrl
+		? "Sandbox LAN action URL validated; frontend binds only to its local private interface."
+		: "Sandbox remains loopback-only; no usable local private action URL was established. Do not send actionable reminders.");
+	const safeEnv = buildSandboxBackendEnv(root, process.env, network);
+	const availableSmtpKeys = smtpEnvKeys.filter((key) => safeEnv[key] !== undefined);
+	console.log(`Sandbox SMTP configuration keys available: ${availableSmtpKeys.join(", ") || "none"}`);
 	const backend = startNode(
 		[resolve(root, "backend/node_modules/tsx/dist/cli.mjs"), resolve(root, "backend/src/ui-sandbox.ts")],
 		{ cwd: root, env: safeEnv },
@@ -258,15 +322,19 @@ async function start() {
 			env: minimalEnv({
 				NODE_ENV: "development",
 				BACKEND_URL: backendUrl,
+				UI_SANDBOX_HOST: network.host,
+				...(network.publicAppUrl ? { PUBLIC_APP_URL: network.publicAppUrl } : {}),
 			}),
 		},
 		"Frontend"
 	);
 	await waitForReady(frontend, "Frontend");
-	await waitForUrl(appUrl, "Frontend");
+	if (network.host === "127.0.0.1") {
+		await waitForUrl(appUrl, "Frontend");
+	}
 
 	console.log(`\nUI sandbox ready: ${appUrl}`);
-	console.log("Local anonymous demo only; this does not test authenticated login or registration.");
+	console.log("Anonymous sandbox demo only; this does not test authenticated login or registration.");
 	console.log(`Persistent demo data: ${dataDir}`);
 	console.log("Press Ctrl+C to stop both local processes.");
 }
@@ -301,11 +369,13 @@ async function shutdown() {
 	}
 }
 
-process.once("SIGINT", () => void shutdown().then(() => process.exit(0)));
-process.once("SIGTERM", () => void shutdown().then(() => process.exit(0)));
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	process.once("SIGINT", () => void shutdown().then(() => process.exit(0)));
+	process.once("SIGTERM", () => void shutdown().then(() => process.exit(0)));
 
-start().catch(async (error) => {
-	console.error(`UI sandbox startup failed: ${error instanceof Error ? error.message : String(error)}`);
-	await shutdown();
-	process.exitCode = 1;
-});
+	start().catch(async (error) => {
+		console.error(`UI sandbox startup failed: ${error instanceof Error ? error.message : String(error)}`);
+		await shutdown();
+		process.exitCode = 1;
+	});
+}

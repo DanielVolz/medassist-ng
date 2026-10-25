@@ -15,20 +15,53 @@ npm run dev:ui
 ```
 
 Once the API and Vite checks pass, the launcher prints a clickable
-`http://127.0.0.1:5176/dashboard` URL for VS Code's integrated browser. It does
+`http://127.0.0.1:5176/dashboard` URL by default for VS Code's integrated browser. It does
 not open a system browser. The sandbox builds `shared/`, starts its own backend
-on `127.0.0.1:5177`, and proxies the frontend on `127.0.0.1:5176` to that
+on `127.0.0.1:5177`, and proxies the frontend on port `5176` to that
 backend. If either fixed port is busy, startup fails rather than reusing or
 changing another app.
 
 This is an explicitly local, unauthenticated demo using the application's
 existing anonymous identity. It is **not** a way to test registration,
 passwords, sessions, SSO, or other authenticated flows. The launcher passes a
-minimal backend environment, does not load repository `.env` files, and keeps
-the database and images under ignored `.ui-dev/data/`. No production auth or
-backend behavior is changed. The processes bind only to loopback; sample
-records use fictitious names and do not rely on external images, catalog
-lookups, email, or push notifications.
+minimal backend environment and keeps the database and images under ignored
+`.ui-dev/data/`. Backend dotenv loading remains disabled. For the optional
+Settings test-email action only, the launcher parses the repository-root
+`.env` and forwards only `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`,
+`SMTP_TOKEN`, `SMTP_FROM`, and `SMTP_SECURE`. It never forwards
+default email recipients, Shoutrrr/ntfy targets, auth values,
+or database settings from that file or the parent environment. Startup reports
+which SMTP keys are available, never their values. If `.env` is absent, the
+sandbox retains its existing isolated environment.
+
+For dose-action links, the launcher separately reads only the hostname of root
+`.env`'s `PUBLIC_APP_URL`. All DNS answers must identify the same private IPv4
+address assigned to a non-internal local interface. Only then does it construct
+`http://<hostname>:5176/`, discarding the production scheme, port, path, query,
+and fragment. This sandbox-only URL reaches both backend and Vite; CORS includes
+its exact origin plus `http://127.0.0.1:5176`, and Vite allows the hostname.
+The frontend binds only the validated private address, never all interfaces;
+the backend remains loopback-only. This exposes the anonymous demo to that LAN,
+so use a trusted network. Missing, malformed, credential-bearing, unresolvable,
+public, or non-local URLs leave the sandbox loopback-only without an action URL.
+Startup reports that fallback without printing the source URL or credentials.
+
+Sandbox schedulers remain disabled and startup does not send notifications.
+The test-email and test-push actions require a destination to be deliberately
+entered in the sandbox UI; no production recipient or push URL is populated.
+Those actions can contact external services when explicitly used, so treat the
+SMTP credentials as live credentials and enter only an intended test
+destination. No production auth or database is used. Sample records use fictitious names and do not rely on external
+images or catalog lookups.
+
+Do not resend reminders until the restarted sandbox URL is reachable from the
+intended device and mocked scheduler/renderer checks pass. Generic Settings
+test-email/test-push messages are not proof of dose actions: a later explicitly
+authorized resend must use the actual intake-reminder flow with one dose per
+action context, and ntfy payloads must contain `Take`, `Skip`, and `View` actions
+pointing only to port 5176. Do not enable background schedulers or use product
+test endpoints for this validation. Opening a `Respond` link is read-only;
+`Take`/`Skip` change sandbox dose state and require deliberate authorization.
 Demo labels are intentionally playful (for example, "Sneezus Interruptus Deluxe"
 for "Professor Wobble McNoodle"); they are fictional UI fixtures, not medical advice.
 

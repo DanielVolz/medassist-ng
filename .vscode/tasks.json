@@ -161,6 +161,30 @@
 			"type": "shell",
 			"command": "cd backend && CI=true npm run test:run -- src/test/decomposition-services.test.ts src/test/medication-enrichment.test.ts src/test/database.test.ts src/test/medications.test.ts src/test/planner.test.ts src/test/settings.test.ts",
 			"isBackground": false
+		},
+		{
+			"label": "Temporary contrast audit in isolated worktree",
+			"type": "shell",
+			"command": "/usr/bin/env",
+			"args": [
+				"PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+				"CI=true",
+				"PLAYWRIGHT_HTML_OPEN=never",
+				"PLAYWRIGHT_WORKERS=1",
+				"/opt/homebrew/bin/node",
+				"/tmp/medassist-dashboard-contrast/frontend/node_modules/@playwright/test/cli.js",
+				"test",
+				"--config=/tmp/medassist-dashboard-contrast/frontend/playwright.stable.config.ts",
+				"--project=chromium",
+				"--workers=1",
+				"--retries=0",
+				"/tmp/medassist-dashboard-contrast/frontend/e2e/accessibility-audit.spec.ts",
+				"--grep",
+				"Dashboard warning"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
 		}
 	]
 }

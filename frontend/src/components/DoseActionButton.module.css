@@ -251,12 +251,25 @@
 .undoTake {
 	--button-bg: color-mix(in srgb, var(--success) 82%, var(--accent-bg));
 	--button-hover: color-mix(in srgb, var(--success) 74%, var(--accent-bg));
-	--button-color: #eafff6;
+	--button-color: var(--button-success-text);
 	--button-bd: 1px solid color-mix(in srgb, var(--success) 88%, white 12%);
 
 	border-color: color-mix(in srgb, var(--success) 88%, white 12%);
 	background: color-mix(in srgb, var(--success) 82%, var(--accent-bg));
-	color: #eafff6;
+	color: var(--button-success-text);
+}
+
+.button.undoTake:disabled {
+	--button-bg: var(--bg-tertiary) !important;
+	--button-color: var(--text-secondary) !important;
+	--button-bd: 1px solid var(--border-primary) !important;
+
+	border-color: var(--border-primary);
+	background: var(--bg-tertiary);
+	color: var(--text-secondary);
+	opacity: 1;
+	cursor: not-allowed;
+	filter: none !important;
 }
 
 .undoSkip {

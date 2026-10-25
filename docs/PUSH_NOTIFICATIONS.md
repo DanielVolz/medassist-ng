@@ -8,7 +8,15 @@ Recommended provider: `ntfy`.
 
 Use `ntfy` when you want the best-supported MedAssist notification flow, especially for intake reminders with actions such as `Take`, `Skip`, and `View`.
 
-For `ntfy`, MedAssist publishes native action buttons so `Take` and `Skip` are executed directly from the notification. The browser-based confirmation flow remains the fallback path for other Shoutrrr targets that do not support native action buttons.
+For `ntfy`, MedAssist publishes native action buttons so `Take` and `Skip` are executed directly from the notification. Each intake reminder is sent separately per dose, even when several medications have the same schedule time or reminders become due in the same scheduler run. ntfy messages remain separate even when action links cannot be created.
+
+Discord and direct HTTP/HTTPS webhook messages use per-dose reminders with a `Respond` link when an action context is available. Opening this link displays the existing confirmation page; taking or skipping the dose requires an explicit confirmation click. Opening a link never marks a dose taken. Pushover, Telegram, Gotify, and `generic://` webhooks do not currently render these dose actions and retain grouped reminders.
+
+Intake reminder emails are sent as one combined message for all selected doses. Each medication entry has its own translated `Respond` link in HTML and plain text when an action context is available; a missing context leaves only that entry without a link and does not split the email. Native ntfy actions and message/email links require a reachable `PUBLIC_APP_URL`.
+
+This batching applies to advance, catch-up/missed, and repeat intake reminders. The email subject and summary cover all selected medications, with repeat text reflecting the selected nagging reminders. Actionable push messages remain separate per dose and use that dose's own reminder count and repeat information. Reminder state advances only for doses covered by a successful delivery on at least one channel; a successful combined email covers every dose in it. A failed per-dose push delivery does not prevent attempts for the remaining doses.
+
+Intake reminder counters are stored by dose and schedule time, so doses sharing a medication name or intake time remain independent. Existing name/time reminder entries are still read as a compatibility fallback. Older application versions do not understand the new keys and may resend reminders after a downgrade.
 
 When an ntfy intake action succeeds, MedAssist publishes the confirmation as the updated notification state and removes the outdated actionable ntfy entry using the original ntfy message ID when available, so duplicate reminder entries do not accumulate unnecessarily.
 

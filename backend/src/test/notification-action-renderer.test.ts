@@ -4,6 +4,7 @@ import {
 	isNtfyNotificationUrl,
 	type PushNotificationAction,
 	renderNotificationActionPayload,
+	supportsDoseActionLinks,
 } from "../services/notifications/action-renderer.js";
 
 function decodeRfc2047Base64(value: string): string {
@@ -32,6 +33,17 @@ const actions: PushNotificationAction[] = [
 ];
 
 describe("notification action renderer", () => {
+	it("identifies notification targets that can carry per-dose action links", () => {
+		expect(supportsDoseActionLinks("ntfy://ntfy.sh/medassist")).toBe(true);
+		expect(supportsDoseActionLinks("https://ntfy.example.com/medassist")).toBe(true);
+		expect(supportsDoseActionLinks("discord://token@webhook-id")).toBe(true);
+		expect(supportsDoseActionLinks("https://hooks.example.com/medassist")).toBe(true);
+		expect(supportsDoseActionLinks("pushover://shoutrrr:token@user-key/")).toBe(false);
+		expect(supportsDoseActionLinks("telegram://token@telegram?chats=123")).toBe(false);
+		expect(supportsDoseActionLinks("gotify://gotify.example.com/token")).toBe(false);
+		expect(supportsDoseActionLinks("generic://hooks.example.com/message?template=json")).toBe(false);
+	});
+
 	it("builds ntfy native actions without duplicate click headers", () => {
 		const result = renderNotificationActionPayload("ntfy://ntfy.sh/medassist", "Body", {
 			actions,

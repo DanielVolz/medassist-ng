@@ -17,6 +17,7 @@ import { env } from "../plugins/env.js";
 import { getAllUserSettings, type UserSettings } from "../routes/settings.js";
 import { buildDoseId } from "../utils/dose-id.js";
 import { parseIntEnv } from "../utils/env-parsing.js";
+import { escapeHtml } from "../utils/html.js";
 import type { ServiceLogger } from "../utils/logger.js";
 // Import shared utilities
 import {
@@ -41,6 +42,7 @@ import {
 	createNotificationActionContext,
 	storeNotificationActionGroupNtfyMessageId,
 } from "./notification-actions-service.js";
+import { getNotificationActionLabels, supportsDoseActionLinks } from "./notifications/action-renderer.js";
 import { getSmtpConfig, sendEmailNotification, sendPushNotification } from "./notifications/delivery.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "./notifications/state.js";
 
@@ -73,6 +75,13 @@ function buildDoseIdForIntake(intake: UpcomingIntake & { medicationId: number; b
 	const intakeDate = intake.intakeTime;
 	const dateOnlyMs = new Date(intakeDate.getFullYear(), intakeDate.getMonth(), intakeDate.getDate()).getTime();
 	return buildDoseId(intake.medicationId, intake.blisterIndex, dateOnlyMs, intake.takenBy);
+}
+
+function getIntakeReminderStateKey(
+	userId: number,
+	intake: UpcomingIntake & { medicationId: number; blisterIndex: number }
+): string {
+	return `user_${userId}:dose:${buildDoseIdForIntake(intake)}:${intake.intakeTime.getTime()}`;
 }
 
 async function getUsernameForLog(userId: number): Promise<string> {
@@ -298,7 +307,8 @@ async function sendIntakeReminderEmail(
 	isRepeat: boolean = false,
 	repeatIntervalMinutes?: number,
 	currentCount?: number,
-	maxCount?: number
+	maxCount?: number,
+	respondUrls: Array<string | undefined> = []
 ): Promise<{ success: boolean; error?: string; messageId?: string; smtpResponse?: string }> {
 	const smtp = getSmtpConfig();
 
@@ -307,6 +317,7 @@ async function sendIntakeReminderEmail(
 	}
 
 	const tr = getTranslations(language);
+	const respondLabel = getNotificationActionLabels(language).respond;
 
 	// Helper to format dosage with weight
 	const formatDosage = (intake: UpcomingIntake): string => {
@@ -328,15 +339,17 @@ async function sendIntakeReminderEmail(
 	};
 
 	const tableRows = intakes
-		.map(
-			(intake) => `
+		.map((intake, index) => {
+			const respondUrl = respondUrls[index];
+			const respondHtml = respondUrl ? `<br /><a href="${escapeHtml(respondUrl)}">${escapeHtml(respondLabel)}</a>` : "";
+			return `
       <tr>
-        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">${formatMedName(intake)}</td>
+        <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">${formatMedName(intake)}${respondHtml}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${formatDosage(intake)}</td>
         <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: center;">${intake.intakeTimeStr}</td>
       </tr>
-    `
-		)
+				`;
+		})
 		.join("");
 
 	const alertText =
@@ -407,10 +420,13 @@ async function sendIntakeReminderEmail(
 
 ${description}
 
+
 ${intakes
-	.map((i) => {
+	.map((i, index) => {
 		const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
-		return `${i.medName}${takenByStr}: ${formatDosagePlain(i)} - ${i.intakeTimeStr}`;
+		const respondUrl = respondUrls[index];
+		const intakeLine = `${i.medName}${takenByStr}: ${formatDosagePlain(i)} - ${i.intakeTimeStr}`;
+		return respondUrl ? `${intakeLine}\n${respondLabel}: ${respondUrl}` : intakeLine;
 	})
 	.join("\n")}
 
@@ -659,8 +675,9 @@ export async function checkAndSendIntakeRemindersForUser(
 	let remindersToSend: ReminderWithCount[] = [];
 
 	for (const intake of allUpcoming) {
-		const key = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
-		const existingEntry = state.reminders[key];
+		const key = getIntakeReminderStateKey(settings.userId, intake);
+		const legacyKey = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
+		const existingEntry = state.reminders[key] ?? state.reminders[legacyKey];
 		const intakeTimeMs = intake.intakeTime.getTime();
 		const isIntakePast = intakeTimeMs < nowMs;
 
@@ -783,56 +800,20 @@ export async function checkAndSendIntakeRemindersForUser(
 		}
 	}
 
-	// Determine if this is a repeat reminder:
-	// - Any intake already has a state entry AND is past (repeat after first reminder)
-	// - OR intake is past even without state entry (missed the 15-min window)
-	const isRepeatReminder = remindersToSend.some((intake) => {
-		const intakeTimeMs = intake.intakeTime.getTime();
-		const isIntakePast = intakeTimeMs < nowMs;
-		return isIntakePast; // Use repeat message for ANY missed intake
-	});
-
 	let emailSuccess = false;
 	let shoutrrrSuccess = false;
-
-	// Send email if enabled for intake reminders
-	if (emailEnabled) {
-		// Calculate counts for repeat reminder text
-		const hasNaggingReminder = remindersToSend.some((r) => !r.isAdvanceReminder);
-		const highestSendCount = Math.max(...remindersToSend.map((r) => r.currentSendCount));
-		const maxReminderCount = remindersToSend[0]?.maxReminders ?? 5;
-
-		const result = await sendIntakeReminderEmail(
-			settings.notificationEmail!,
-			remindersToSend,
-			language,
-			isRepeatReminder,
-			settings.reminderRepeatIntervalMinutes,
-			hasNaggingReminder ? highestSendCount : undefined,
-			hasNaggingReminder ? maxReminderCount : undefined
-		);
-		emailSuccess = result.success;
-		if (!result.success) {
-			logger.error(
-				`[IntakeReminder] Email delivery failed for user=${username} (userId=${settings.userId}): ${result.error}`
-			);
-		} else {
-			logger.info(
-				`[IntakeReminder] Email delivered for user=${username} (userId=${settings.userId}, recipient=${settings.notificationEmail}, reminders=${remindersToSend.length}, messageId=${result.messageId ?? "n/a"})`
-			);
-		}
-	}
-
-	// Send Shoutrrr notification if enabled for intake reminders
-	if (shoutrrrEnabled) {
-		// Check if any reminder is a nagging reminder (not advance)
-		const hasNaggingReminder = remindersToSend.some((r) => !r.isAdvanceReminder);
-		const highestSendCount = Math.max(...remindersToSend.map((r) => r.currentSendCount));
-		const maxReminderCount = remindersToSend[0]?.maxReminders ?? 5;
+	const deliveredDoseIds = new Set<string>();
+	const actionContextPromises = new Map<
+		string,
+		Promise<Awaited<ReturnType<typeof createNotificationActionContext>> | null>
+	>();
+	const buildPushPayload = (reminders: ReminderWithCount[]) => {
+		const hasNaggingReminder = reminders.some((reminder) => !reminder.isAdvanceReminder);
+		const highestSendCount = Math.max(...reminders.map((reminder) => reminder.currentSendCount));
+		const maxReminderCount = reminders[0]?.maxReminders ?? 5;
 
 		let title: string;
 		if (hasNaggingReminder && highestSendCount > 0) {
-			// Nagging reminder - show counter
 			const counterStr = `(${highestSendCount}/${maxReminderCount})`;
 			if (language === "pt-PT") {
 				title = `⚠️ Aviso: Toma da medicação ${counterStr}`;
@@ -844,141 +825,229 @@ export async function checkAndSendIntakeRemindersForUser(
 				title = `⚠️ Reminder: Medication intake ${counterStr}`;
 			}
 		} else {
-			// Advance reminder - no counter
 			title = t(tr.push.intakeTitle, { minutes: REMINDER_MINUTES_BEFORE });
 		}
 
-		// Only show repeat note for nagging reminders, not for advance reminders
 		let repeatNote = "";
 		if (hasNaggingReminder && settings.reminderRepeatIntervalMinutes) {
 			const remainingReminders = maxReminderCount - highestSendCount;
 			if (remainingReminders <= 0) {
-				// Last reminder
 				repeatNote = `\n\n${tr.intakeReminder.repeatLast}`;
 			} else if (remainingReminders === 1) {
-				// One more reminder
 				repeatNote = `\n\n${t(tr.intakeReminder.repeatOne, { minutes: settings.reminderRepeatIntervalMinutes })}`;
 			} else {
-				// Multiple reminders remaining
 				repeatNote = `\n\n${t(tr.intakeReminder.repeatMultiple, { count: remainingReminders, minutes: settings.reminderRepeatIntervalMinutes })}`;
 			}
 		}
 
 		const message =
-			remindersToSend
-				.map((i) => {
-					const takenByStr = i.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: i.takenBy })}` : "";
-					let dosage = `${i.usage} ${i.usage === 1 ? tr.common.pill : tr.common.pills}`;
-					if (i.pillWeightMg) {
-						const totalMg = i.usage * i.pillWeightMg;
+			reminders
+				.map((intake) => {
+					const takenByStr = intake.takenBy ? ` ${t(tr.intakeReminder.takenBy, { name: intake.takenBy })}` : "";
+					let dosage = `${intake.usage} ${intake.usage === 1 ? tr.common.pill : tr.common.pills}`;
+					if (intake.pillWeightMg) {
+						const totalMg = intake.usage * intake.pillWeightMg;
 						dosage += totalMg >= 1000 ? ` (${(totalMg / 1000).toFixed(1)} g)` : ` (${totalMg} mg)`;
 					}
-					return `• ${i.medName}${takenByStr}: ${dosage} @ ${i.intakeTimeStr}`;
+					return `• ${intake.medName}${takenByStr}: ${dosage} @ ${intake.intakeTimeStr}`;
 				})
 				.join("\n") +
 			repeatNote +
 			`\n\n---\n${getFooterPlain(language)}`;
-		const actionMode = remindersToSend.length === 1 ? "full" : "view-only";
-		const actionDoseIds = remindersToSend.map((intake) =>
-			buildDoseIdForIntake({
-				...intake,
-				medicationId: intake.medicationId,
-				blisterIndex: intake.blisterIndex,
-			})
-		);
-		let actionContext: Awaited<ReturnType<typeof createNotificationActionContext>> | null = null;
-		let actionContextFailed = false;
-		try {
-			actionContext = await createNotificationActionContext({
+
+		return { title, message, hasNaggingReminder, highestSendCount, maxReminderCount };
+	};
+	const getDoseActionContext = (intake: ReminderWithCount) => {
+		const key = getIntakeReminderStateKey(settings.userId, intake);
+		let contextPromise = actionContextPromises.get(key);
+		if (!contextPromise) {
+			const { title, message } = buildPushPayload([intake]);
+			contextPromise = createNotificationActionContext({
 				userId: settings.userId,
 				title,
 				message,
-				doseIds: actionDoseIds,
-				scheduledFor: remindersToSend[0]?.intakeTime ?? new Date(),
+				doseIds: [buildDoseIdForIntake(intake)],
+				scheduledFor: intake.intakeTime,
 				publicAppUrl: env.PUBLIC_APP_URL,
 				language,
-				actionMode,
+				actionMode: "full",
+			}).catch((error) => {
+				actionContextPromises.delete(key);
+				throw error;
 			});
-		} catch (error) {
-			actionContextFailed = true;
-			const errorMessage = error instanceof Error ? error.message : String(error);
-			logger.error(
-				`[IntakeReminder] Notification action context failed for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
-					settings.shoutrrrUrl!
-				)}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext: null })}): ${errorMessage}`
-			);
+			actionContextPromises.set(key, contextPromise);
 		}
-		if (!actionContext) {
-			if (actionContextFailed) {
-				logger.warn(
-					`[IntakeReminder] Sending intake reminders without actions after action context failure for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
-						settings.shoutrrrUrl!
-					)})`
-				);
-			} else {
-				logger.warn(
-					`[IntakeReminder] No reachable public app URL configured; sending intake reminders without actions for user=${username} (userId=${settings.userId})`
-				);
-			}
-		} else {
-			logger.info(
-				`[IntakeReminder] Notification action context ready for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
-					settings.shoutrrrUrl!
-				)}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
-			);
-		}
+		return contextPromise;
+	};
 
-		const pushProvider = getPushProviderLabel(settings.shoutrrrUrl!);
-		logger.info(
-			`[IntakeReminder] Sending push reminder for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${remindersToSend.length}, priority=${hasNaggingReminder ? 4 : 3}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
-		);
-
-		const result = await sendPushNotification(settings.shoutrrrUrl!, title, message, {
-			language,
-			actions: actionContext?.actions,
-			respondUrl: actionContext?.respondUrl,
-			viewUrl: actionContext?.viewUrl,
-			clickUrl: actionContext?.respondUrl ?? actionContext?.viewUrl,
-			sequenceId: actionContext?.sequenceId,
-			tags: ["pill"],
-			priority: hasNaggingReminder ? 4 : 3,
-		});
-		shoutrrrSuccess = result.success;
-		if (!result.success) {
-			logger.error(
-				`[IntakeReminder] Push delivery failed for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${remindersToSend.length}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })}): ${result.error}`
-			);
-		} else {
-			if (actionContext?.groupId && result.providerMessageId) {
+	// Send email if enabled for intake reminders
+	if (emailEnabled) {
+		const respondUrls = await Promise.all(
+			remindersToSend.map(async (intake) => {
 				try {
-					await storeNotificationActionGroupNtfyMessageId(actionContext.groupId, result.providerMessageId);
-					logger.info(
-						`[IntakeReminder] Stored ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId}, providerMessageId=${result.providerMessageId})`
-					);
+					const context = await getDoseActionContext(intake);
+					return context?.respondUrl;
 				} catch (error) {
 					const errorMessage = error instanceof Error ? error.message : String(error);
+					logger.error(
+						`[IntakeReminder] Email action context failed (userId=${settings.userId}, doseId=${buildDoseIdForIntake(intake)}): ${errorMessage}; sending aggregate email without this link`
+					);
+					return undefined;
+				}
+			})
+		);
+		const linkedReminderCount = respondUrls.filter(Boolean).length;
+		if (linkedReminderCount < remindersToSend.length) {
+			logger.warn(
+				`[IntakeReminder] Sending aggregate email with missing action links (userId=${settings.userId}, reminders=${remindersToSend.length}, linked=${linkedReminderCount})`
+			);
+		}
+
+		const repeatReminders = remindersToSend.filter((reminder) => !reminder.isAdvanceReminder);
+		const hasNaggingReminder = repeatReminders.length > 0;
+		const highestSendCount = hasNaggingReminder
+			? Math.max(...repeatReminders.map((reminder) => reminder.currentSendCount))
+			: undefined;
+		const maxReminderCount = repeatReminders[0]?.maxReminders ?? remindersToSend[0]?.maxReminders ?? 5;
+		const result = await sendIntakeReminderEmail(
+			settings.notificationEmail!,
+			remindersToSend,
+			language,
+			remindersToSend.some((reminder) => reminder.intakeTime.getTime() < nowMs),
+			settings.reminderRepeatIntervalMinutes,
+			highestSendCount,
+			hasNaggingReminder ? maxReminderCount : undefined,
+			respondUrls
+		);
+		emailSuccess ||= result.success;
+		if (!result.success) {
+			logger.error(
+				`[IntakeReminder] Email delivery failed for user=${username} (userId=${settings.userId}, reminders=${remindersToSend.length}, doseIds=${remindersToSend.map(buildDoseIdForIntake).join(",")}): ${result.error}`
+			);
+		} else {
+			for (const intake of remindersToSend) deliveredDoseIds.add(buildDoseIdForIntake(intake));
+			logger.info(
+				`[IntakeReminder] Email delivered for user=${username} (userId=${settings.userId}, recipient=${settings.notificationEmail}, reminders=${remindersToSend.length}, linked=${linkedReminderCount}, messageId=${result.messageId ?? "n/a"})`
+			);
+		}
+	}
+
+	// Send Shoutrrr notification if enabled for intake reminders
+	if (shoutrrrEnabled) {
+		const pushUrl = settings.shoutrrrUrl!;
+		const splitPush = supportsDoseActionLinks(pushUrl);
+		const pushBatches = splitPush ? remindersToSend.map((intake) => [intake]) : [remindersToSend];
+		for (const reminders of pushBatches) {
+			const { title, message, hasNaggingReminder } = buildPushPayload(reminders);
+			const actionMode = reminders.length === 1 ? "full" : "view-only";
+			const actionDoseIds = reminders.map((intake) =>
+				buildDoseIdForIntake({
+					...intake,
+					medicationId: intake.medicationId,
+					blisterIndex: intake.blisterIndex,
+				})
+			);
+			let actionContext: Awaited<ReturnType<typeof createNotificationActionContext>> | null = null;
+			let actionContextFailed = false;
+			try {
+				if (actionMode === "full" && reminders[0]) {
+					actionContext = await getDoseActionContext(reminders[0]);
+				} else {
+					actionContext = await createNotificationActionContext({
+						userId: settings.userId,
+						title,
+						message,
+						doseIds: actionDoseIds,
+						scheduledFor: reminders[0]?.intakeTime ?? new Date(),
+						publicAppUrl: env.PUBLIC_APP_URL,
+						language,
+						actionMode,
+					});
+				}
+			} catch (error) {
+				actionContextFailed = true;
+				const errorMessage = error instanceof Error ? error.message : String(error);
+				logger.error(
+					`[IntakeReminder] Notification action context failed for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
+						settings.shoutrrrUrl!
+					)}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext: null })}): ${errorMessage}`
+				);
+			}
+			if (!actionContext) {
+				if (actionContextFailed) {
 					logger.warn(
-						`[IntakeReminder] Failed to store ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId}, providerMessageId=${result.providerMessageId}): ${errorMessage}`
+						`[IntakeReminder] Sending intake reminders without actions after action context failure for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
+							settings.shoutrrrUrl!
+						)})`
+					);
+				} else {
+					logger.warn(
+						`[IntakeReminder] No reachable public app URL configured; sending intake reminders without actions for user=${username} (userId=${settings.userId})`
 					);
 				}
-			} else if (actionContext?.groupId && pushProvider === "ntfy") {
-				logger.warn(
-					`[IntakeReminder] Push delivered without ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId})`
+			} else {
+				logger.info(
+					`[IntakeReminder] Notification action context ready for user=${username} (userId=${settings.userId}, provider=${getPushProviderLabel(
+						settings.shoutrrrUrl!
+					)}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
 				);
 			}
 
+			const pushProvider = getPushProviderLabel(settings.shoutrrrUrl!);
 			logger.info(
-				`[IntakeReminder] Push delivered for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${remindersToSend.length}, providerMessageId=${result.providerMessageId ?? "n/a"}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
+				`[IntakeReminder] Sending push reminder for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${reminders.length}, priority=${hasNaggingReminder ? 4 : 3}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
 			);
+
+			const result = await sendPushNotification(settings.shoutrrrUrl!, title, message, {
+				language,
+				actions: actionContext?.actions,
+				respondUrl: actionContext?.respondUrl,
+				viewUrl: actionContext?.viewUrl,
+				clickUrl: actionContext?.respondUrl ?? actionContext?.viewUrl,
+				sequenceId: actionContext?.sequenceId,
+				tags: ["pill"],
+				priority: hasNaggingReminder ? 4 : 3,
+			});
+			shoutrrrSuccess ||= result.success;
+			if (!result.success) {
+				logger.error(
+					`[IntakeReminder] Push delivery failed for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${reminders.length}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })}): ${result.error}`
+				);
+			} else {
+				for (const doseId of actionDoseIds) deliveredDoseIds.add(doseId);
+				if (actionContext?.groupId && result.providerMessageId) {
+					try {
+						await storeNotificationActionGroupNtfyMessageId(actionContext.groupId, result.providerMessageId);
+						logger.info(
+							`[IntakeReminder] Stored ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId}, providerMessageId=${result.providerMessageId})`
+						);
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						logger.warn(
+							`[IntakeReminder] Failed to store ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId}, providerMessageId=${result.providerMessageId}): ${errorMessage}`
+						);
+					}
+				} else if (actionContext?.groupId && pushProvider === "ntfy") {
+					logger.warn(
+						`[IntakeReminder] Push delivered without ntfy message id for action group for user=${username} (userId=${settings.userId}, groupId=${actionContext.groupId})`
+					);
+				}
+
+				logger.info(
+					`[IntakeReminder] Push delivered for user=${username} (userId=${settings.userId}, provider=${pushProvider}, reminders=${reminders.length}, providerMessageId=${result.providerMessageId ?? "n/a"}, ${formatActionContextLog({ actionMode, doseCount: actionDoseIds.length, actionContext })})`
+				);
+			}
 		}
 	}
 
 	// Update state if any notification was sent successfully
 	if (emailSuccess || shoutrrrSuccess) {
+		const deliveredReminders = remindersToSend.filter((intake) => deliveredDoseIds.has(buildDoseIdForIntake(intake)));
 		// Update or create entries for sent reminders
-		for (const intake of remindersToSend) {
-			const key = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
-			const existing = state.reminders[key];
+		for (const intake of deliveredReminders) {
+			const key = getIntakeReminderStateKey(settings.userId, intake);
+			const legacyKey = `user_${settings.userId}:${intake.medName}:${intake.intakeTime.getTime()}`;
+			const existing = state.reminders[key] ?? state.reminders[legacyKey];
 
 			if (existing) {
 				// Update existing entry
@@ -1032,12 +1101,12 @@ export async function checkAndSendIntakeRemindersForUser(
 
 		// Also update user settings in database so frontend can display the info
 		// Get the first reminder's medication name and taken by for display
-		const firstReminder = remindersToSend[0];
+		const firstReminder = deliveredReminders[0];
 		const medName = firstReminder?.medName;
 		const takenBy = firstReminder?.takenBy || undefined;
 		await updateUserReminderSentTime(settings.userId, "intake", channel, medName, takenBy);
 		logger.info(
-			`[IntakeReminder] Reminder state persisted for user=${username} (userId=${settings.userId}, channel=${channel}, reminders=${remindersToSend.length}, firstMed=${medName ?? "n/a"}, firstTakenBy=${takenBy ?? "none"})`
+			`[IntakeReminder] Reminder state persisted for user=${username} (userId=${settings.userId}, channel=${channel}, reminders=${deliveredReminders.length}, firstMed=${medName ?? "n/a"}, firstTakenBy=${takenBy ?? "none"})`
 		);
 	} else {
 		logger.info(

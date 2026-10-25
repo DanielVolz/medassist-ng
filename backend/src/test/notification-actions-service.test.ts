@@ -69,6 +69,33 @@ describe("notification-actions-service", () => {
 		mockedEnv.CORS_ORIGINS = "http://localhost:5173,http://localhost:4174";
 	});
 
+	it("does not create loopback action links when sandbox LAN URL is unavailable", async () => {
+		const previousSandboxFlag = process.env.UI_SANDBOX_LAUNCHER;
+		process.env.UI_SANDBOX_LAUNCHER = "1";
+		mockedEnv.PUBLIC_APP_URL = "";
+		mockedEnv.CORS_ORIGINS = "http://127.0.0.1:5176";
+
+		try {
+			const context = await createNotificationActionContext({
+				userId: 1,
+				title: "Sandbox reminder",
+				message: "One dose",
+				doseIds: ["9-0-1736064000000"],
+				scheduledFor: new Date("2026-01-05T08:00:00.000Z"),
+				publicAppUrl: "",
+				language: "en-US",
+			});
+
+			expect(context).toBeNull();
+		} finally {
+			if (previousSandboxFlag === undefined) {
+				delete process.env.UI_SANDBOX_LAUNCHER;
+			} else {
+				process.env.UI_SANDBOX_LAUNCHER = previousSandboxFlag;
+			}
+		}
+	});
+
 	it("creates a notification action group with hashed tokens and app/view links", async () => {
 		const userId = await createUser("notify-actions-user");
 		const scheduledFor = new Date("2026-01-05T08:00:00.000Z");

@@ -65,6 +65,16 @@ export function isNtfyNotificationUrl(urlStr: string): boolean {
 	}
 }
 
+export function supportsDoseActionLinks(urlStr: string): boolean {
+	const normalizedUrl = urlStr.trim().toLowerCase();
+	return (
+		isNtfyNotificationUrl(normalizedUrl) ||
+		normalizedUrl.startsWith("discord://") ||
+		normalizedUrl.startsWith("http://") ||
+		normalizedUrl.startsWith("https://")
+	);
+}
+
 export function getNotificationActionLabels(language: Language): {
 	taken: string;
 	skip: string;

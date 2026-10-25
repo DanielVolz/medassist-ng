@@ -55,6 +55,10 @@ function isLoopbackHostname(hostname: string): boolean {
 }
 
 function resolveNotificationPublicAppUrl(publicAppUrl: string | null | undefined): string | null {
+	if (process.env.UI_SANDBOX_LAUNCHER === "1" && !publicAppUrl?.trim() && !env.PUBLIC_APP_URL?.trim()) {
+		return null;
+	}
+
 	const configuredUrl = parseConfiguredUrl(publicAppUrl ?? env.PUBLIC_APP_URL);
 	if (configuredUrl && !isLoopbackHostname(configuredUrl.hostname)) {
 		return normalizePublicAppUrl(configuredUrl.toString());

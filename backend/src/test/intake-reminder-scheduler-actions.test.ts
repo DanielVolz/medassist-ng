@@ -5,6 +5,8 @@ const {
 	createNotificationActionContextMock,
 	storeNotificationActionGroupNtfyMessageIdMock,
 	sendPushNotificationMock,
+	getSmtpConfigMock,
+	sendEmailNotificationMock,
 	existsSyncMock,
 	readFileSyncMock,
 	writeFileSyncMock,
@@ -17,6 +19,15 @@ const {
 	createNotificationActionContextMock: vi.fn(),
 	storeNotificationActionGroupNtfyMessageIdMock: vi.fn(),
 	sendPushNotificationMock: vi.fn(),
+	getSmtpConfigMock: vi.fn(() => ({
+		host: undefined,
+		user: undefined,
+		pass: undefined,
+		port: 587,
+		secure: false,
+		from: undefined,
+	})),
+	sendEmailNotificationMock: vi.fn(),
 	existsSyncMock: vi.fn(() => false),
 	readFileSyncMock: vi.fn(),
 	writeFileSyncMock: vi.fn(),
@@ -55,8 +66,8 @@ vi.mock("../services/as-needed-intakes-service.js", () => ({
 }));
 
 vi.mock("../services/notifications/delivery.js", () => ({
-	getSmtpConfig: vi.fn(() => null),
-	sendEmailNotification: vi.fn(),
+	getSmtpConfig: getSmtpConfigMock,
+	sendEmailNotification: sendEmailNotificationMock,
 	sendPushNotification: sendPushNotificationMock,
 }));
 
@@ -93,13 +104,14 @@ vi.mock("../utils/scheduler-utils.js", async () => {
 			],
 			takenBy: [],
 		}),
-		getTodaysIntakes: () => [candidate],
-		getUpcomingIntakes: () => [candidate],
+		getTodaysIntakes: (medName: string) => [{ ...candidate, medName }],
+		getUpcomingIntakes: (medName: string) => [{ ...candidate, medName }],
 	};
 });
 
 import { db } from "../db/client.js";
 import { checkAndSendIntakeRemindersForUser } from "../services/intake-reminder-scheduler.js";
+import { getSmtpConfig, sendEmailNotification } from "../services/notifications/delivery.js";
 import { updateReminderSentTime, updateUserReminderSentTime } from "../services/notifications/state.js";
 
 function createLogger() {
@@ -159,6 +171,17 @@ describe("intake reminder scheduler action wiring", () => {
 		createNotificationActionContextMock.mockReset();
 		storeNotificationActionGroupNtfyMessageIdMock.mockReset();
 		sendPushNotificationMock.mockReset();
+		vi.mocked(getSmtpConfig).mockReset();
+		vi.mocked(getSmtpConfig).mockReturnValue({
+			host: undefined,
+			user: undefined,
+			pass: undefined,
+			port: 587,
+			secure: false,
+			from: undefined,
+		});
+		vi.mocked(sendEmailNotification).mockReset();
+		vi.mocked(sendEmailNotification).mockResolvedValue({ success: true });
 		existsSyncMock.mockReset();
 		existsSyncMock.mockReturnValue(false);
 		readFileSyncMock.mockReset();
@@ -283,72 +306,47 @@ describe("intake reminder scheduler action wiring", () => {
 		expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("Push delivered"));
 	});
 
-	it("uses view-only actions for grouped intake reminders", async () => {
+	it("sends per-dose actionable email and push reminders with shared action contexts", async () => {
 		mockedEnv.PUBLIC_APP_URL = "https://app.example.com";
+		vi.mocked(getSmtpConfig).mockReturnValue({
+			host: "smtp.example.com",
+			user: "medassist",
+			pass: "smtp-test-pass",
+			port: 587,
+			secure: false,
+			from: "medassist@example.com",
+		});
 
 		const selectMock = vi.mocked(mockedDb.select);
-		selectMock
-			.mockImplementationOnce(() => mockSelectWhere([{ username: "grouped-user" }]))
-			.mockImplementationOnce(() =>
-				mockSelectWhere([
-					{
-						id: 7,
-						userId: 13,
-						name: "Calcium",
-						genericName: null,
-						takenByJson: null,
-						packageType: "blister",
-						medicationForm: "tablet",
-						packCount: 1,
-						blistersPerPack: 1,
-						pillsPerBlister: 10,
-						looseTablets: 0,
-						stockAdjustment: 0,
-						pillWeightMg: null,
-						doseUnit: "mg",
-						isObsolete: false,
-						intakeRemindersEnabled: true,
-						intakesJson: "[]",
-						usageJson: "[]",
-						everyJson: "[]",
-						startJson: "[]",
-					},
-					{
-						id: 8,
-						userId: 13,
-						name: "Vitamin D",
-						genericName: null,
-						takenByJson: null,
-						packageType: "blister",
-						medicationForm: "tablet",
-						packCount: 1,
-						blistersPerPack: 1,
-						pillsPerBlister: 10,
-						looseTablets: 0,
-						stockAdjustment: 0,
-						pillWeightMg: null,
-						doseUnit: "mg",
-						isObsolete: false,
-						intakeRemindersEnabled: true,
-						intakesJson: "[]",
-						usageJson: "[]",
-						everyJson: "[]",
-						startJson: "[]",
-					},
-				])
-			)
-			.mockImplementationOnce(() => mockSelectWhere([]));
+		const reminderMedications = [
+			createReminderMedicationRow({ id: 7, userId: 13, name: "Calcium" }),
+			createReminderMedicationRow({ id: 8, userId: 13, name: "Vitamin D" }),
+		];
+		const configureReminderQueries = () => {
+			selectMock.mockReset();
+			selectMock
+				.mockImplementationOnce(() => mockSelectWhere([{ username: "grouped-user" }]))
+				.mockImplementationOnce(() => mockSelectWhere(reminderMedications))
+				.mockImplementationOnce(() => mockSelectWhere([]));
+		};
+		configureReminderQueries();
 
-		createNotificationActionContextMock.mockResolvedValue({
-			actions: [
-				{
-					kind: "view",
-					label: "View",
-					url: "https://app.example.com/dashboard?day=2026-01-05&dose=7-0-1736075700000",
-					method: "GET",
-				},
-			],
-			viewUrl: "https://app.example.com/dashboard?day=2026-01-05&dose=7-0-1736075700000",
+		createNotificationActionContextMock.mockImplementation(async (input) => {
+			const doseId = input.doseIds[0];
+			return {
+				groupId: doseId.startsWith("7-") ? 71 : 81,
+				sequenceId: `sequence-${doseId}`,
+				respondUrl: `https://app.example.com/api/notification-actions/respond-${doseId}`,
+				viewUrl: `https://app.example.com/dashboard?day=2026-01-05&dose=${doseId}`,
+				actions: [
+					{
+						kind: "taken",
+						label: "Take",
+						url: `https://app.example.com/api/notification-actions/taken-${doseId}`,
+						method: "POST",
+					},
+				],
+			};
 		});
 		sendPushNotificationMock.mockResolvedValue({ success: true });
 
@@ -359,9 +357,9 @@ describe("intake reminder scheduler action wiring", () => {
 				userId: 13,
 				language: "en-US",
 				stockCalculationMode: "manual",
-				emailEnabled: false,
-				notificationEmail: null,
-				emailIntakeReminders: false,
+				emailEnabled: true,
+				notificationEmail: "user@example.com",
+				emailIntakeReminders: true,
 				shoutrrrEnabled: true,
 				shoutrrrUrl: "ntfy://ntfy.sh/medassist",
 				shoutrrrIntakeReminders: true,
@@ -370,36 +368,70 @@ describe("intake reminder scheduler action wiring", () => {
 			logger as never
 		);
 
-		expect(createNotificationActionContextMock).toHaveBeenCalledWith(
-			expect.objectContaining({
+		expect(createNotificationActionContextMock).toHaveBeenCalledTimes(2);
+		const actionContextCalls = createNotificationActionContextMock.mock.calls.map(([input]) => input);
+		expect(actionContextCalls.map((input) => input.doseIds)).toEqual([
+			[expect.stringMatching(/^7-0-/)],
+			[expect.stringMatching(/^8-0-/)],
+		]);
+		expect(actionContextCalls.every((input) => input.actionMode === "full")).toBe(true);
+
+		expect(sendEmailNotification).toHaveBeenCalledTimes(1);
+		const emailBody = vi.mocked(sendEmailNotification).mock.calls[0]?.[0];
+		expect(emailBody?.text).toContain("Calcium");
+		expect(emailBody?.text).toContain("Vitamin D");
+		expect(emailBody?.text).toMatch(
+			/Calcium[^\n]*\nRespond: https:\/\/app\.example\.com\/api\/notification-actions\/respond-7-0-/
+		);
+		expect(emailBody?.text).toMatch(
+			/Vitamin D[^\n]*\nRespond: https:\/\/app\.example\.com\/api\/notification-actions\/respond-8-0-/
+		);
+		expect(emailBody?.html).toContain("Calcium");
+		expect(emailBody?.html).toContain("Vitamin D");
+		expect(emailBody?.html).toMatch(
+			/<td[^>]*>Calcium<br \/><a href="https:\/\/app\.example\.com\/api\/notification-actions\/respond-7-0-[^"]+">Respond<\/a><\/td>/
+		);
+		expect(emailBody?.html).toMatch(
+			/<td[^>]*>Vitamin D<br \/><a href="https:\/\/app\.example\.com\/api\/notification-actions\/respond-8-0-[^"]+">Respond<\/a><\/td>/
+		);
+
+		expect(sendPushNotificationMock).toHaveBeenCalledTimes(2);
+		expect(sendPushNotificationMock.mock.calls[0]?.[3]).toMatchObject({
+			actions: [expect.objectContaining({ kind: "taken", url: expect.stringContaining("taken-7-0-") })],
+			respondUrl: expect.stringContaining("respond-7-0-"),
+		});
+		expect(sendPushNotificationMock.mock.calls[1]?.[3]).toMatchObject({
+			actions: [expect.objectContaining({ kind: "taken", url: expect.stringContaining("taken-8-0-") })],
+			respondUrl: expect.stringContaining("respond-8-0-"),
+		});
+
+		configureReminderQueries();
+		createNotificationActionContextMock.mockReset().mockResolvedValue(null);
+		vi.mocked(sendEmailNotification).mockClear();
+		await checkAndSendIntakeRemindersForUser(
+			{
 				userId: 13,
-				publicAppUrl: "https://app.example.com",
 				language: "en-US",
-				actionMode: "view-only",
-				doseIds: [expect.stringMatching(/^7-0-/), expect.stringMatching(/^8-0-/)],
-			})
+				stockCalculationMode: "manual",
+				emailEnabled: true,
+				notificationEmail: "user@example.com",
+				emailIntakeReminders: true,
+				shoutrrrEnabled: false,
+				shoutrrrUrl: null,
+				shoutrrrIntakeReminders: false,
+				repeatRemindersEnabled: false,
+			} as never,
+			createLogger() as never
 		);
-		expect(sendPushNotificationMock).toHaveBeenCalledWith(
-			"ntfy://ntfy.sh/medassist",
-			expect.any(String),
-			expect.any(String),
-			expect.objectContaining({
-				actions: [
-					{
-						kind: "view",
-						label: "View",
-						url: "https://app.example.com/dashboard?day=2026-01-05&dose=7-0-1736075700000",
-						method: "GET",
-					},
-				],
-				respondUrl: undefined,
-				viewUrl: "https://app.example.com/dashboard?day=2026-01-05&dose=7-0-1736075700000",
-				clickUrl: "https://app.example.com/dashboard?day=2026-01-05&dose=7-0-1736075700000",
-				sequenceId: undefined,
-				tags: ["pill"],
-				priority: 3,
-			})
-		);
+
+		expect(sendEmailNotification).toHaveBeenCalledTimes(1);
+		const fallbackEmail = vi.mocked(sendEmailNotification).mock.calls[0]?.[0];
+		expect(fallbackEmail?.text).toContain("Calcium");
+		expect(fallbackEmail?.text).toContain("Vitamin D");
+		expect(fallbackEmail?.text).not.toContain("Respond:");
+		expect(fallbackEmail?.html).toContain("Calcium");
+		expect(fallbackEmail?.html).toContain("Vitamin D");
+		expect(fallbackEmail?.html).not.toContain("Respond</a>");
 	});
 
 	it("sends push notifications without actions when PUBLIC_APP_URL is missing", async () => {

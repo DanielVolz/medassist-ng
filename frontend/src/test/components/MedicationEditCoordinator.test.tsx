@@ -25,6 +25,7 @@ describe("MedicationEditCoordinator", () => {
 		);
 
 		expect(screen.getByText("form.newEntry")).toBeInTheDocument();
+		expect(screen.getByRole("complementary", { name: "form.newEntry" })).toBeInTheDocument();
 		expect(document.querySelector("aside[data-open='true']")).not.toBeInTheDocument();
 
 		fireEvent.click(screen.getByRole("button", { name: "common.back" }));
@@ -32,6 +33,26 @@ describe("MedicationEditCoordinator", () => {
 
 		fireEvent.submit(document.querySelector("form") as HTMLFormElement);
 		expect(onSubmit).toHaveBeenCalledTimes(1);
+	});
+
+	it("focuses the named editor heading when the desktop form opens", () => {
+		const props = {
+			viewMode: "grid" as const,
+			editingId: null,
+			readOnlyView: false,
+			onBack: vi.fn(),
+			onSubmit: vi.fn((event: FormEvent<HTMLFormElement>) => event.preventDefault()),
+			children: <div>content</div>,
+		};
+		const { rerender } = render(<MedicationEditCoordinator {...props} />);
+
+		rerender(<MedicationEditCoordinator {...props} viewMode="form" />);
+
+		const editor = screen.getByRole("complementary", { name: "form.newEntry" });
+		const heading = screen.getByRole("heading", { name: "form.newEntry" });
+		expect(editor).toHaveAttribute("data-open", "true");
+		expect(heading).toHaveAttribute("tabindex", "-1");
+		expect(heading).toHaveFocus();
 	});
 
 	it("renders edit header for editable and read-only flows", () => {

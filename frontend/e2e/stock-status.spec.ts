@@ -14,7 +14,7 @@ import {
  *
  * Creates medications with different stock levels, then verifies the dashboard
  * overview table shows the correct stock statuses (High, Normal, Low, Critical, Empty).
- * Also tests the reorder reminder card and medication detail modal stock info.
+ * Also tests the dashboard refill reminder and medication detail modal stock info.
  */
 test.describe("Stock Status Levels", () => {
 	test.use({ storageState: authFile });
@@ -255,18 +255,14 @@ test.describe("Stock Status Levels", () => {
 		expect(depletedText.includes("0") || depletedText.includes("—")).toBeTruthy();
 	});
 
-	test("should show reorder reminder card with low-stock medications", async ({ page }) => {
+	test("should show low-stock medications in the refill reminder section", async ({ page }) => {
 		await navigateTo(page, "/dashboard");
 
-		// The reorder card should mention low-stock medications
-		const reorderCard = page.locator("article.card").filter({ hasText: /Reorder|low|running|refill/i });
-		if (await reorderCard.isVisible().catch(() => false)) {
-			// Should mention at least one of the low stock meds
-			const cardText = await reorderCard.textContent();
-			const mentionsLow =
-				cardText?.includes(MED_LOW) || cardText?.includes(MED_CRITICAL) || cardText?.includes(MED_DEPLETED);
-			expect(mentionsLow).toBeTruthy();
-		}
+		const reorderSection = page.getByRole("heading", { name: "Refill Reminder" }).locator("xpath=ancestor::section[1]");
+		await expect(reorderSection).toBeVisible();
+		await expect(reorderSection).toContainText(MED_LOW);
+		await expect(reorderSection).toContainText(MED_CRITICAL);
+		await expect(reorderSection).toContainText(/\d+ days? left/i);
 	});
 
 	test("should preserve stock status semantics in overview rows", async ({ page }) => {
@@ -303,9 +299,10 @@ test.describe("Stock Status Levels", () => {
 		await expect(modal).toBeVisible({ timeout: 5000 });
 		await expect(modal.getByText(MED_CRITICAL)).toBeVisible();
 
-		// Modal should show stock/coverage details
-		const modalText = await modal.textContent();
-		expect(modalText).toBeTruthy();
+		await expect(modal.getByText(stockStatusText.critical)).toBeVisible();
+		const overviewStockCount = (await criticalRow.getByRole("cell").nth(1).innerText()).match(/\d+/)?.[0];
+		expect(overviewStockCount).toBeDefined();
+		await expect(modal.getByText(new RegExp(`^${overviewStockCount} / 5$`))).toBeVisible();
 
 		// Close modal
 		await modal.getByLabel(/Close|common\.close/i).click();

@@ -172,7 +172,7 @@ async function checkEditorGeometry(
 	await expect(scheduleTab).toHaveAttribute("aria-selected", "true");
 	await expect(editor.locator(".blister-row")).toHaveCount(8);
 	await expect(editor.getByRole("tabpanel")).toHaveCount(1);
-	await expect(editor.locator('[role="tabpanel"][hidden]')).toHaveCount(3);
+	await expect(editor.locator('[role="tabpanel"][aria-hidden="true"]')).toHaveCount(3);
 
 	const prescriptionTab = editor.getByRole("tab", { name: /Prescription/i });
 	await page.keyboard.press("ArrowRight");
@@ -366,7 +366,7 @@ test.describe("Medication editor UI regressions", () => {
 			await reportTrigger.click();
 			const reportDialog = page.getByRole("dialog", { name: "Medication Report" });
 			await expect(reportDialog).toBeVisible();
-			await reportDialog.getByRole("button", { name: "Close" }).click();
+			await reportDialog.getByTestId("app-modal-footer").getByRole("button", { name: "Close", exact: true }).click();
 			await expect(reportDialog).not.toBeVisible();
 			await expect(reportTrigger).toBeFocused();
 		});
@@ -376,7 +376,7 @@ test.describe("Medication editor UI regressions", () => {
 			await createMedicationViaAPI({ name: medicationName });
 			await navigateToMedicationList(page);
 			const row = page.getByRole("listitem", { name: medicationName });
-			const obsoleteTrigger = row.getByRole("button", { name: `Mark ${medicationName} obsolete` });
+			const obsoleteTrigger = row.getByRole("button", { name: `Mark obsolete: ${medicationName}`, exact: true });
 			await obsoleteTrigger.click();
 			const obsoleteDialog = page.getByRole("dialog", { name: "Mark medication as obsolete" });
 			await expect(obsoleteDialog).toBeVisible();

@@ -337,6 +337,72 @@ describe("MedicationsPage", () => {
 		openNewMedicationForm();
 		expect(screen.getByText(/form\.commercialName/i)).toBeInTheDocument();
 		expect(screen.getByText(/form\.genericName/i)).toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "form.newEntry" })).toHaveFocus();
+	});
+
+	it("restores focus to the create trigger when the desktop editor closes", async () => {
+		renderPage();
+		const newMedicationButton = screen.getByRole("button", { name: "form.newEntry" });
+		fireEvent.click(newMedicationButton);
+		const editor = screen.getByRole("complementary", { name: "form.newEntry" });
+		const backButton = screen.getByRole("button", { name: "common.back" });
+
+		fireEvent.click(backButton);
+
+		await waitFor(() => {
+			expect(editor).toHaveAttribute("data-open", "false");
+			expect(newMedicationButton).toHaveFocus();
+		});
+	});
+
+	it("moves through every desktop editor section for modified arrow-key events", async () => {
+		renderPage();
+		openNewMedicationForm();
+		const tablist = screen.getByRole("tablist", { name: "form.sections.ariaLabel" });
+		const tabs = Array.from(tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+		const panels = Array.from(document.querySelectorAll<HTMLElement>('[role="tabpanel"]'));
+		const sectionNames = ["general", "stock", "schedule", "prescription"];
+
+		expect(tabs).toHaveLength(4);
+		expect(panels).toHaveLength(4);
+		expect(tabs.map((tab) => tab.textContent)).toEqual(sectionNames.map((name) => `form.sections.${name}`));
+
+		const expectActiveSection = async (activeIndex: number) => {
+			await waitFor(() => {
+				expect(tabs[activeIndex]).toHaveFocus();
+				expect(tabs[activeIndex]).toHaveAttribute("aria-selected", "true");
+				expect(tabs[activeIndex]).toHaveAttribute("tabindex", "0");
+			});
+
+			for (const [index, tab] of tabs.entries()) {
+				expect(tab).toHaveAttribute("aria-selected", index === activeIndex ? "true" : "false");
+				expect(tab).toHaveAttribute("tabindex", index === activeIndex ? "0" : "-1");
+
+				const panel = panels.find((candidate) => candidate.id === tab.getAttribute("aria-controls"));
+				expect(panel).toHaveAttribute("aria-labelledby", tab.id);
+				if (index === activeIndex) {
+					expect(panel).not.toHaveAttribute("hidden");
+				} else {
+					expect(panel).toHaveAttribute("hidden");
+				}
+			}
+		};
+
+		let currentIndex = 0;
+		tabs[currentIndex].focus();
+		await expectActiveSection(currentIndex);
+
+		// Synthetic key events validate the app handler only; they do not emulate VoiceOver.
+		for (const [key, expectedIndexes] of [
+			["ArrowRight", [1, 2, 3, 0]],
+			["ArrowLeft", [3, 2, 1, 0]],
+		] as const) {
+			for (const expectedIndex of expectedIndexes) {
+				fireEvent.keyDown(tabs[currentIndex], { key, ctrlKey: true, shiftKey: true });
+				currentIndex = expectedIndex;
+				await expectActiveSection(currentIndex);
+			}
+		}
 	});
 
 	it("shows the shared required-name errors on desktop edit submit", async () => {
@@ -606,7 +672,7 @@ describe("MedicationsPage with items", () => {
 		});
 
 		renderPage();
-		fireEvent.click(screen.getByText("medications.list.markObsolete"));
+		fireEvent.click(screen.getByRole("button", { name: "medications.list.actionMarkObsolete" }));
 		expect(screen.getByTestId("confirm-modal")).toBeInTheDocument();
 
 		const confirmButtons = screen.getAllByText("medications.list.markObsolete");
@@ -657,9 +723,10 @@ describe("MedicationsPage with items", () => {
 		fireEvent.click(obsoleteToggleButton);
 
 		await waitFor(() => {
+			expect(document.getElementById("obsolete-medications-list")).toHaveAttribute("hidden");
 			expect(
 				screen.queryByRole("button", {
-					name: "medications.list.actionReactivate",
+					name: /medications\.list\.actionReactivate/,
 				})
 			).not.toBeInTheDocument();
 		});
@@ -670,9 +737,10 @@ describe("MedicationsPage with items", () => {
 				expanded: false,
 			})
 		);
+		expect(document.getElementById("obsolete-medications-list")).not.toHaveAttribute("hidden");
 		expect(
 			screen.getByRole("button", {
-				name: "medications.list.actionReactivate",
+				name: /medications\.list\.actionReactivate/,
 			})
 		).toBeInTheDocument();
 	});

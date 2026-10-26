@@ -165,10 +165,26 @@ async function checkEditorGeometry(
 	}
 
 	const scheduleTab = editor.getByRole("tab", { name: /Schedule/i });
+	const tablist = editor.getByRole("tablist", { name: /Sections/i });
+	await expect(tablist).toBeVisible();
 	await scheduleTab.focus();
 	await page.keyboard.press("Enter");
 	await expect(scheduleTab).toHaveAttribute("aria-selected", "true");
 	await expect(editor.locator(".blister-row")).toHaveCount(8);
+	await expect(editor.getByRole("tabpanel")).toHaveCount(1);
+	if (isMobile) {
+		await expect(editor.locator('[role="tabpanel"][aria-hidden="true"]')).toHaveCount(3);
+	} else {
+		await expect(editor.locator('[role="tabpanel"][hidden]')).toHaveCount(3);
+	}
+
+	const prescriptionTab = editor.getByRole("tab", { name: /Prescription/i });
+	await page.keyboard.press("ArrowRight");
+	await expect(prescriptionTab).toBeFocused();
+	await expect(prescriptionTab).toHaveAttribute("aria-selected", "true");
+	await expect(prescriptionTab).toHaveAttribute("tabindex", "0");
+	await expect(scheduleTab).toHaveAttribute("tabindex", "-1");
+	await scheduleTab.click();
 
 	if (!isMobile) {
 		const scrollBody = editor.locator("form > div").first();
@@ -283,8 +299,118 @@ test.describe("Medication editor UI regressions", () => {
 			await newMedication.click();
 			const editor = emptyView.mobile ? page.getByRole("dialog") : page.locator('aside[data-open="true"]');
 			await expect(editor).toBeVisible();
+			if (!emptyView.mobile) {
+				await expect(editor.getByRole("heading", { name: /New medication/i })).toBeFocused();
+			}
+			await editor.getByRole("button", { name: /Back/i }).click();
+			await expect(editor).not.toBeVisible();
+			await expect(newMedication).toBeFocused();
 		});
 	}
+
+	test.describe("medication list accessibility and focus returns", () => {
+		test.use({ viewport: { width: 1280, height: 900 }, isMobile: false, hasTouch: false });
+
+		test("exposes named medication rows and unique contextual actions", async ({ page }) => {
+			await seedMedications();
+			await navigateToMedicationList(page);
+
+			const medicationList = page.getByRole("list", { name: "Medication list" });
+			await expect(medicationList.getByRole("listitem")).toHaveCount(4);
+			const firstRow = page.getByRole("listitem", { name: longName });
+			const secondMedication = "Supplemental fictional medication 1";
+			const secondRow = page.getByRole("listitem", { name: secondMedication });
+			await expect(firstRow.getByRole("button", { name: `Edit ${longName}` })).toBeVisible();
+			await expect(firstRow.getByRole("button", { name: `Delete ${longName}` })).toBeVisible();
+			await expect(secondRow.getByRole("button", { name: `Edit ${secondMedication}` })).toBeVisible();
+			await expect(secondRow.getByRole("button", { name: `Delete ${secondMedication}` })).toBeVisible();
+		});
+
+		test("returns focus after create and announces the successful save", async ({ page }) => {
+			await navigateToMedicationList(page);
+			const createTrigger = page.locator('[data-medication-create="true"]');
+			await createTrigger.click();
+			const editor = page.locator('aside[data-open="true"]');
+			const heading = editor.getByRole("heading", { name: "New medication" });
+			await expect(heading).toBeFocused();
+			await editor.getByLabel("Commercial Name").fill("Focus Return Create Check");
+
+			const createResponse = page.waitForResponse(
+				(response) => response.request().method() === "POST" && new URL(response.url()).pathname === "/api/medications"
+			);
+			await editor.getByRole("button", { name: "Save", exact: true }).click();
+			expect((await createResponse).ok()).toBe(true);
+			await expect(page.getByTestId("medication-row").filter({ hasText: "Focus Return Create Check" })).toBeVisible();
+			await expect(page.getByRole("status")).toContainText("Saved");
+			await expect(createTrigger).toBeFocused();
+		});
+
+		test("restores focus after image and report dialogs close", async ({ page }) => {
+			const medicationName = "Image and report focus check";
+			const medication = await createMedicationViaAPI({ name: medicationName });
+			await page.route("**/api/medications**", async (route) => {
+				if (route.request().method() === "GET") {
+					await route.fulfill({ json: [{ ...medication, imageUrl: "focus-check.jpg" }] });
+					return;
+				}
+				await route.continue();
+			});
+			await navigateToMedicationList(page);
+			const row = page.getByRole("listitem", { name: medicationName });
+
+			const imageTrigger = row.getByRole("button", { name: `View image of ${medicationName}` });
+			await imageTrigger.click();
+			const imageDialog = page.getByRole("dialog", { name: medicationName });
+			await expect(imageDialog).toBeVisible();
+			await imageDialog.getByRole("button", { name: "Close" }).click();
+			await expect(imageDialog).not.toBeVisible();
+			await expect(imageTrigger).toBeFocused();
+
+			const reportTrigger = page.getByRole("button", { name: "Report", exact: true });
+			await reportTrigger.click();
+			const reportDialog = page.getByRole("dialog", { name: "Medication Report" });
+			await expect(reportDialog).toBeVisible();
+			await reportDialog.getByTestId("app-modal-footer").getByRole("button", { name: "Close", exact: true }).click();
+			await expect(reportDialog).not.toBeVisible();
+			await expect(reportTrigger).toBeFocused();
+		});
+
+		test("returns focus to the obsolete control or create trigger after confirmation", async ({ page }) => {
+			const medicationName = "Confirm focus check";
+			await createMedicationViaAPI({ name: medicationName });
+			await navigateToMedicationList(page);
+			const row = page.getByRole("listitem", { name: medicationName });
+			const obsoleteTrigger = row.getByRole("button", { name: `Mark obsolete: ${medicationName}`, exact: true });
+			await obsoleteTrigger.click();
+			const obsoleteDialog = page.getByRole("dialog", { name: "Mark medication as obsolete" });
+			await expect(obsoleteDialog).toBeVisible();
+			await obsoleteDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+			await expect(obsoleteDialog).not.toBeVisible();
+			await expect(obsoleteTrigger).toBeFocused();
+			await obsoleteTrigger.click();
+			await expect(obsoleteDialog).toBeVisible();
+			await obsoleteDialog.getByRole("button", { name: "Mark obsolete", exact: true }).click();
+			await expect(obsoleteDialog).not.toBeVisible();
+			const obsoleteToggle = page.locator("[data-obsolete-toggle]");
+			await expect(obsoleteToggle).toBeFocused();
+			if ((await obsoleteToggle.getAttribute("aria-expanded")) === "false") await obsoleteToggle.click();
+
+			const deleteRow = page.getByRole("listitem", { name: medicationName });
+			const deleteTrigger = deleteRow.getByRole("button", { name: `Delete ${medicationName}` });
+			await deleteTrigger.click();
+			const deleteDialog = page.getByRole("dialog", { name: "Delete medication" });
+			await expect(deleteDialog).toBeVisible();
+			await deleteDialog.getByRole("button", { name: "Cancel", exact: true }).click();
+			await expect(deleteDialog).not.toBeVisible();
+			await expect(deleteTrigger).toBeFocused();
+			await deleteTrigger.click();
+			await expect(deleteDialog).toBeVisible();
+			await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
+			await expect(deleteDialog).not.toBeVisible();
+			await expect(page.getByRole("listitem", { name: medicationName })).toHaveCount(0);
+			await expect(page.getByRole("button", { name: "New medication", exact: true })).toBeFocused();
+		});
+	});
 
 	for (const viewport of [
 		{ name: "desktop", size: { width: 1280, height: 900 }, mobile: false, theme: "light" as const },

@@ -324,7 +324,7 @@ test.describe("Mobile modal browser back", () => {
 				await navigateTo(page, "/medications");
 				const medicationRow = page.getByTestId("medication-row").filter({ hasText: medicationName });
 				await expect(medicationRow).toBeVisible({ timeout: 10000 });
-				await medicationRow.getByRole("button", { name: /Edit|common\.edit|Bearbeiten/i }).click();
+				await medicationRow.getByRole("button", { name: /^(?:Edit|common\.edit|Bearbeiten)\b/i }).click();
 
 				const editor = page
 					.getByRole("dialog")

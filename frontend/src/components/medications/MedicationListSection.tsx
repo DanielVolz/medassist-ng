@@ -29,17 +29,17 @@ type MedicationListSectionProps = {
 	isCompact?: boolean;
 	showObsolete: boolean;
 	coverageByMed: Record<string, { medsLeft: number }>;
-	onNewEntry: () => void;
-	onOpenReport: () => void;
-	onEdit: (med: Medication) => void;
+	onNewEntry: (trigger: HTMLElement) => void;
+	onOpenReport: (trigger: HTMLElement) => void;
+	onEdit: (med: Medication, trigger: HTMLElement) => void;
 	onRecordNow?: (med: Medication) => void;
 	canRecordNow?: (med: Medication) => boolean;
-	onView: (med: Medication) => void;
-	onMarkObsolete: (med: Medication) => void;
-	onDelete: (med: Medication) => void;
-	onReactivate: (medId: number) => void;
+	onView: (med: Medication, trigger: HTMLElement) => void;
+	onMarkObsolete: (med: Medication, trigger: HTMLElement) => void;
+	onDelete: (med: Medication, trigger: HTMLElement) => void;
+	onReactivate: (medId: number, trigger: HTMLElement) => void;
 	onToggleObsolete: () => void;
-	onImagePreview: (med: Medication) => void;
+	onImagePreview: (med: Medication, trigger: HTMLElement) => void;
 	getMedicationPackageTypeLabel: (med: Medication) => string;
 	getMedicationStockSuffix: (med: Medication) => string;
 	getMedicationUsageUnitLabel: (med: Medication, usage: number) => string;
@@ -83,12 +83,12 @@ export function MedicationListSection({
 		return (
 			<button
 				type="button"
-				aria-label={displayName}
+				aria-label={t("medications.list.actionPreviewImage", { name: displayName })}
 				className={cx(classes.imagePreviewButton, "med-avatar-clickable")}
 				data-testid="medication-image-preview"
 				onClick={(e) => {
 					e.stopPropagation();
-					onImagePreview(med);
+					onImagePreview(med, e.currentTarget);
 				}}
 			>
 				<MedicationAvatar name={displayName} imageUrl={med.imageUrl} size="lg" />
@@ -105,11 +105,12 @@ export function MedicationListSection({
 						type="button"
 						tone="primary"
 						leftSection={<Plus size={16} aria-hidden="true" />}
-						onClick={onNewEntry}
+						onClick={(event) => onNewEntry(event.currentTarget)}
+						data-medication-create="true"
 					>
 						{t("form.newEntry")}
 					</AppButton>
-					<AppButton type="button" tone="secondary" onClick={onOpenReport}>
+					<AppButton type="button" tone="secondary" onClick={(event) => onOpenReport(event.currentTarget)}>
 						{t("report.button")}
 					</AppButton>
 				</div>
@@ -117,7 +118,7 @@ export function MedicationListSection({
 		>
 			<div className={classes.groups}>
 				<div className={classes.group}>
-					<div className={cx(classes.grid, isCompact && classes.gridCompact)}>
+					<ul className={cx(classes.grid, isCompact && classes.gridCompact)} aria-label={t("medications.list.title")}>
 						{orderedMeds.map((med) => {
 							const displayName = getMedDisplayName(med);
 							const medicationIntakes = getMedicationIntakes(med);
@@ -130,9 +131,12 @@ export function MedicationListSection({
 							const fillLevel = getStockFillLevel(fillPct);
 
 							return (
-								<div
+								<li
 									key={med.id}
 									className={cx(classes.medicationRow, editingId === med.id && classes.medicationRowEditing)}
+									tabIndex={-1}
+									aria-labelledby={`medication-row-name-${med.id}`}
+									data-medication-id={med.id}
 									data-testid="medication-row"
 								>
 									<div className={classes.header}>
@@ -140,7 +144,9 @@ export function MedicationListSection({
 											<div className={classes.nameRow}>
 												{renderImageAvatar(med)}
 												<div className={classes.nameBlock}>
-													<div className={classes.name}>{displayName}</div>
+													<div id={`medication-row-name-${med.id}`} className={classes.name}>
+														{displayName}
+													</div>
 													{med.name && med.genericName && <div className={classes.genericName}>{med.genericName}</div>}
 												</div>
 											</div>
@@ -152,8 +158,8 @@ export function MedicationListSection({
 															className={cx(classes.actionIcon, classes.actionBrand)}
 															color="gray"
 															variant="default"
-															onClick={() => onEdit(med)}
-															aria-label={t("common.edit")}
+															onClick={(event) => onEdit(med, event.currentTarget)}
+															aria-label={t("medications.list.actionEdit", { name: displayName })}
 														>
 															<Pencil size={18} aria-hidden="true" />
 														</ActionIcon>
@@ -164,8 +170,8 @@ export function MedicationListSection({
 													tone="secondary"
 													className={cx(classes.actionButton, classes.actionWarning)}
 													leftSection={<Archive size={16} aria-hidden="true" />}
-													onClick={() => onMarkObsolete(med)}
-													aria-label={t("medications.list.markObsolete")}
+													onClick={(event) => onMarkObsolete(med, event.currentTarget)}
+													aria-label={t("medications.list.actionMarkObsolete", { name: displayName })}
 												>
 													{t("medications.list.markObsolete")}
 												</AppButton>
@@ -175,8 +181,8 @@ export function MedicationListSection({
 														className={cx(classes.actionIcon, classes.actionDanger)}
 														color="gray"
 														variant="default"
-														onClick={() => onDelete(med)}
-														aria-label={t("common.delete")}
+														onClick={(event) => onDelete(med, event.currentTarget)}
+														aria-label={t("medications.list.actionDelete", { name: displayName })}
 													>
 														<Trash2 size={18} aria-hidden="true" />
 													</ActionIcon>
@@ -242,6 +248,7 @@ export function MedicationListSection({
 														size="xs"
 														leftSection={<Plus size={14} aria-hidden="true" />}
 														onClick={() => onRecordNow?.(med)}
+														aria-label={t("medications.list.actionRecordNow", { name: displayName })}
 													>
 														{t("dose.take")}
 													</AppButton>
@@ -268,92 +275,104 @@ export function MedicationListSection({
 											</div>
 										))}
 									</div>
-								</div>
+								</li>
 							);
 						})}
-					</div>
+					</ul>
 				</div>
 				{obsoleteMeds.length > 0 && (
 					<div className={cx(classes.group, classes.groupObsolete)}>
-						<button
-							type="button"
-							className={cx(classes.groupHead, classes.groupHeadToggle)}
-							onClick={onToggleObsolete}
-							aria-expanded={showObsolete}
+						<h3 className={classes.groupTitle}>
+							<button
+								type="button"
+								className={cx(classes.groupHead, classes.groupHeadToggle)}
+								onClick={onToggleObsolete}
+								aria-expanded={showObsolete}
+								aria-controls="obsolete-medications-list"
+								data-obsolete-toggle="true"
+							>
+								<span aria-hidden="true">{showObsolete ? "▼" : "▶"}</span>{" "}
+								<span id="obsolete-medications-heading">
+									{t("medications.list.obsoleteTitle", { count: obsoleteMeds.length })}
+								</span>
+							</button>
+						</h3>
+						<ul
+							id="obsolete-medications-list"
+							className={cx(classes.grid, isCompact && classes.gridCompact)}
+							aria-labelledby="obsolete-medications-heading"
+							hidden={!showObsolete}
 						>
-							<h3 className={classes.groupTitle}>
-								{showObsolete ? "▼" : "▶"} {t("medications.list.obsoleteTitle", { count: obsoleteMeds.length })}
-							</h3>
-						</button>
-						{showObsolete && (
-							<div className={cx(classes.grid, isCompact && classes.gridCompact)}>
-								{obsoleteMeds.map((med) => (
-									<div
-										key={med.id}
-										className={cx(classes.medicationRow, classes.obsoleteRow)}
-										data-testid="medication-row"
-									>
-										<div className={classes.header}>
-											<div className={classes.info}>
-												<div className={classes.nameRow}>
-													{renderImageAvatar(med)}
-													<div className={classes.nameBlock}>
-														<div className={classes.name}>{getMedDisplayName(med)}</div>
-														{med.name && med.genericName && (
-															<div className={classes.genericName}>{med.genericName}</div>
-														)}
+							{obsoleteMeds.map((med) => (
+								<li
+									key={med.id}
+									className={cx(classes.medicationRow, classes.obsoleteRow)}
+									tabIndex={-1}
+									aria-labelledby={`medication-row-name-${med.id}`}
+									data-medication-id={med.id}
+									data-testid="medication-row"
+								>
+									<div className={classes.header}>
+										<div className={classes.info}>
+											<div className={classes.nameRow}>
+												{renderImageAvatar(med)}
+												<div className={classes.nameBlock}>
+													<div id={`medication-row-name-${med.id}`} className={classes.name}>
+														{getMedDisplayName(med)}
 													</div>
+													{med.name && med.genericName && <div className={classes.genericName}>{med.genericName}</div>}
 												</div>
-												<div className={classes.actions}>
-													<AppTooltip label={t("common.view")}>
-														<ActionIcon
-															type="button"
-															className={cx(classes.actionIcon, classes.actionBrand)}
-															color="gray"
-															variant="default"
-															onClick={() => onView(med)}
-															aria-label={t("common.view")}
-														>
-															<Eye size={18} aria-hidden="true" />
-														</ActionIcon>
-													</AppTooltip>
-													<AppTooltip label={t("common.delete")}>
-														<ActionIcon
-															type="button"
-															className={cx(classes.actionIcon, classes.actionDanger)}
-															color="gray"
-															variant="default"
-															onClick={() => onDelete(med)}
-															aria-label={t("common.delete")}
-														>
-															<Trash2 size={18} aria-hidden="true" />
-														</ActionIcon>
-													</AppTooltip>
-													<AppButton
+											</div>
+											<div className={classes.actions}>
+												<AppTooltip label={t("common.view")}>
+													<ActionIcon
 														type="button"
-														tone="secondary"
-														className={cx(classes.actionButton, classes.actionSuccess)}
-														onClick={() => onReactivate(med.id)}
+														className={cx(classes.actionIcon, classes.actionBrand)}
+														color="gray"
+														variant="default"
+														onClick={(event) => onView(med, event.currentTarget)}
+														aria-label={t("medications.list.actionView", { name: getMedDisplayName(med) })}
 													>
-														{t("medications.list.reactivate")}
-													</AppButton>
-												</div>
-												<div className={classes.details}>
-													{med.medicationStartDate && (
-														<span className={classes.fullDetail}>
-															{t("medications.list.started")}: <strong>{formatDate(med.medicationStartDate)}</strong>
-														</span>
-													)}
+														<Eye size={18} aria-hidden="true" />
+													</ActionIcon>
+												</AppTooltip>
+												<AppTooltip label={t("common.delete")}>
+													<ActionIcon
+														type="button"
+														className={cx(classes.actionIcon, classes.actionDanger)}
+														color="gray"
+														variant="default"
+														onClick={(event) => onDelete(med, event.currentTarget)}
+														aria-label={t("medications.list.actionDelete", { name: getMedDisplayName(med) })}
+													>
+														<Trash2 size={18} aria-hidden="true" />
+													</ActionIcon>
+												</AppTooltip>
+												<AppButton
+													type="button"
+													tone="secondary"
+													className={cx(classes.actionButton, classes.actionSuccess)}
+													onClick={(event) => onReactivate(med.id, event.currentTarget)}
+													aria-label={t("medications.list.actionReactivate", { name: getMedDisplayName(med) })}
+												>
+													{t("medications.list.reactivate")}
+												</AppButton>
+											</div>
+											<div className={classes.details}>
+												{med.medicationStartDate && (
 													<span className={classes.fullDetail}>
-														{t("medications.list.obsoleteSince")}: <strong>{formatDate(med.obsoleteAt)}</strong>
+														{t("medications.list.started")}: <strong>{formatDate(med.medicationStartDate)}</strong>
 													</span>
-												</div>
+												)}
+												<span className={classes.fullDetail}>
+													{t("medications.list.obsoleteSince")}: <strong>{formatDate(med.obsoleteAt)}</strong>
+												</span>
 											</div>
 										</div>
 									</div>
-								))}
-							</div>
-						)}
+								</li>
+							))}
+						</ul>
 					</div>
 				)}
 			</div>

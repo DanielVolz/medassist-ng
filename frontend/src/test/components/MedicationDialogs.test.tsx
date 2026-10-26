@@ -5,29 +5,35 @@ import type { Medication } from "../../types";
 
 vi.mock("../../components/ConfirmModal", () => ({
 	ConfirmModal: ({
+		opened = true,
 		title,
 		confirmLabel,
 		cancelLabel,
 		onConfirm,
 		onCancel,
+		onExitTransitionEnd,
 		overlayClassName,
 	}: {
+		opened?: boolean;
 		title: string;
 		confirmLabel: string;
 		cancelLabel: string;
 		onConfirm: () => void;
 		onCancel: () => void;
+		onExitTransitionEnd?: () => void;
 		overlayClassName?: string;
-	}) => (
-		<div data-testid={`confirm-${title}`} data-overlay-class={overlayClassName ?? ""}>
-			<button type="button" onClick={onConfirm}>
-				{confirmLabel}
-			</button>
-			<button type="button" onClick={onCancel}>
-				{cancelLabel}
-			</button>
-		</div>
-	),
+	}) =>
+		opened ? (
+			<div data-testid={`confirm-${title}`} data-overlay-class={overlayClassName ?? ""}>
+				<button type="button" onClick={onConfirm}>
+					{confirmLabel}
+				</button>
+				<button type="button" onClick={onCancel}>
+					{cancelLabel}
+				</button>
+				<button type="button" data-testid={`confirm-exit-${title}`} onClick={onExitTransitionEnd} />
+			</div>
+		) : null,
 }));
 
 vi.mock("../../components/Lightbox", () => ({
@@ -35,7 +41,12 @@ vi.mock("../../components/Lightbox", () => ({
 }));
 
 vi.mock("../../components/ReportModal", () => ({
-	default: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div data-testid="report-modal">report</div> : null),
+	default: ({ isOpen, onExitTransitionEnd }: { isOpen: boolean; onExitTransitionEnd: () => void }) => (
+		<>
+			{isOpen ? <div data-testid="report-modal">report</div> : null}
+			<button type="button" data-testid="report-exit" onClick={onExitTransitionEnd} />
+		</>
+	),
 }));
 
 const baseMedication: Medication = {
@@ -98,6 +109,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof MedicationDi
 		unsavedTitle: "unsaved-title",
 		onConfirmClose: vi.fn(),
 		onCancelClose: vi.fn(),
+		onUnsavedConfirmExit: vi.fn(),
 		showNoScheduleConfirm: false,
 		noScheduleTitle: "no-schedule-title",
 		noScheduleMessage: "no-schedule-message",
@@ -105,6 +117,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof MedicationDi
 		noScheduleCancelLabel: "cancel-no-schedule",
 		onConfirmNoSchedule: vi.fn(),
 		onCancelNoSchedule: vi.fn(),
+		onNoScheduleConfirmExit: vi.fn(),
 		showObsoleteConfirm: false,
 		obsoleteCandidate: null,
 		obsoleteTitle: "obsolete-title",
@@ -113,6 +126,7 @@ function createProps(overrides: Partial<React.ComponentProps<typeof MedicationDi
 		obsoleteCancelLabel: "cancel-obsolete",
 		onConfirmMarkObsolete: vi.fn(),
 		onCancelMarkObsolete: vi.fn(),
+		onObsoleteConfirmExit: vi.fn(),
 		showDeleteConfirm: false,
 		deleteCandidate: null,
 		deleteTitle: "delete-title",
@@ -121,11 +135,13 @@ function createProps(overrides: Partial<React.ComponentProps<typeof MedicationDi
 		deleteCancelLabel: "cancel-delete",
 		onConfirmDelete: vi.fn(),
 		onCancelDelete: vi.fn(),
+		onDeleteConfirmExit: vi.fn(),
 		showEditModal: false,
 		lightboxImage: null,
 		onCloseLightbox: vi.fn(),
 		showReportModal: false,
 		onCloseReportModal: vi.fn(),
+		onReportModalExit: vi.fn(),
 		medications: [baseMedication],
 		...overrides,
 	};
@@ -218,5 +234,36 @@ describe("MedicationDialogs", () => {
 		);
 
 		expect(screen.getByTestId("lightbox")).toHaveTextContent("https://example.com/a.jpg|Medication image");
+	});
+
+	it("forwards exit-transition callbacks for confirmation and report dialogs", () => {
+		const callbacks = {
+			onUnsavedConfirmExit: vi.fn(),
+			onNoScheduleConfirmExit: vi.fn(),
+			onObsoleteConfirmExit: vi.fn(),
+			onDeleteConfirmExit: vi.fn(),
+			onReportModalExit: vi.fn(),
+		};
+		render(
+			<MedicationDialogs
+				{...createProps({
+					...callbacks,
+					showUnsavedConfirm: true,
+					showNoScheduleConfirm: true,
+					showObsoleteConfirm: true,
+					obsoleteCandidate: baseMedication,
+					showDeleteConfirm: true,
+					deleteCandidate: baseMedication,
+					showReportModal: true,
+				})}
+			/>
+		);
+
+		for (const title of ["unsaved-title", "no-schedule-title", "obsolete-title", "delete-title"]) {
+			fireEvent.click(screen.getByTestId(`confirm-exit-${title}`));
+		}
+		fireEvent.click(screen.getByTestId("report-exit"));
+
+		for (const callback of Object.values(callbacks)) expect(callback).toHaveBeenCalledTimes(1);
 	});
 });

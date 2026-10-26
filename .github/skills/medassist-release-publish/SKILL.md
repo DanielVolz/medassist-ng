@@ -9,7 +9,7 @@ Use only after the release branch has merged. Do not use for PR creation, PR CI 
 
 1. From merged authoritative `main`, create and publish the authorized signed `vX.Y.Z` tag only when both package versions and production compose image tags are exactly `X.Y.Z`.
 2. Publish or update GitHub release notes only through the `gh release create` or `gh release edit` note-body action defined by `medassist-release-notes`.
-3. Keep one state record while monitoring the tagged Docker workflow. Verify versioned `X.Y.Z`, `X.Y`, and `latest` backend/frontend images are published.
+3. Keep one state record while monitoring the tagged Docker workflow. For stable releases, verify versioned `X.Y.Z`, `X.Y`, and `latest` backend/frontend images. For prereleases, verify the prerelease tags and confirm `latest` still resolves to the prior stable digests.
 4. Verify the GitHub release includes `docker-compose.pinned.yml` with backend and frontend `X.Y.Z@sha256:...` references produced by the same tagged build, and that merged compose tags match `X.Y.Z`, not later `latest` images.
-5. Verify post-build badge update completion. Report the release URL, tag/merge SHA, image/asset verification, badge result, and any genuine blocker.
+5. Verify the README links to the Test workflow status badge; no separate badge-update workflow is expected. Report the release URL, tag/merge SHA, image/asset verification, and any genuine blocker.
 6. Local cleanup is part of release completion: run `git fetch --prune`, switch to `main`, fast-forward it to the remote `main`, and delete the merged local release branch (`git branch -D` is acceptable after confirming its PR is merged, because squash merges are not detected by `git branch -d`). Carry unrelated uncommitted changes onto `main` without discarding them; if they conflict, stop and report. Do not report the release as done while the workspace is still on the release branch.

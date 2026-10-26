@@ -133,11 +133,26 @@ function validateWorkflowNeeds(workflowPath) {
     .map((value) => value.trim())
     .filter(Boolean);
 
-  for (const requiredNeed of ["build-and-push", "container-smoke"]) {
+  for (const requiredNeed of ["build-and-push", "container-smoke", "promote"]) {
     if (!needs.includes(requiredNeed)) {
       fail(`${workflowPath} create-release.needs must include ${requiredNeed}. Found [${needs.join(", ")}].`);
     }
   }
+  const job = (name) => workflow.match(new RegExp(`^  ${name}:\\n[\\s\\S]*?(?=^  [a-z][\\w-]*:|$(?![\\s\\S]))`, "m"))?.[0] || "";
+  const requireJob = (name, pattern, message) => { if (!pattern.test(job(name))) fail(`${workflowPath} ${message}.`); };
+  requireJob("build-and-push", /needs: prepare-image-coordinates/, "candidate build must depend on static preflight");
+  requireJob("prepare-image-coordinates", /npm run release:preflight[^\n]*--static-only/, "must run static preflight before candidate upload");
+  requireJob("build-and-push", /outputs: type=image,name=[^\n]+,push-by-digest=true,name-canonical=true,push=true/, "must upload candidates by digest only");
+  requireJob("resolve-digests", /needs: \[prepare-image-coordinates, build-and-push\][\s\S]*image-digest-\*[\s\S]*cat "image-digests\/\$image.digest"/, "must resolve digests from candidate build artifacts");
+  requireJob("build-and-push", /platforms: linux\/amd64,linux\/arm64[\s\S]*provenance: mode=max[\s\S]*sbom: true/, "must preserve multiarch builds and attestations");
+  if (/^\s+(?:push: true|tags: \$\{\{ steps.meta.outputs.tags)/m.test(job("build-and-push"))) fail(`${workflowPath} must not tag candidates before smoke.`);
+  requireJob("container-smoke", /needs: resolve-digests[\s\S]*image_source: published[\s\S]*backend_image_ref: \$\{\{ needs.resolve-digests.outputs.backend \}\}[\s\S]*frontend_image_ref: \$\{\{ needs.resolve-digests.outputs.frontend \}\}/, "must smoke exact produced digest refs");
+  requireJob("promote", /needs: \[resolve-digests, container-smoke\]/, "promotion must depend on successful smoke");
+  requireJob("promote", /^\s*docker buildx imagetools create --prefer-index=false "\$\{tags\[@\]\}" "\$source_ref"$/m, "must promote a single tested source without rebuilding");
+  requireJob("promote", /test "sha256:\$actual" = "\$\{source_ref##\*@\}"/, "must verify promoted tags against the source digest");
+  requireJob("build-and-push", /flavor: latest=false[\s\S]*value=latest,enable=[^\n]+prerelease == 'false'/, "prereleases must not move latest");
+  requireJob("prepare-image-coordinates", /"\$image_tag" == latest && "\$release_tag" == \*-\*/, "manual prereleases must not move latest");
+  requireJob("create-release", /prerelease: \$\{\{ needs.prepare-image-coordinates.outputs.prerelease == 'true' \}\}/, "release must use the preflight prerelease classification");
 }
 
 function validateDockerBuildCachePolicy(workflowPath) {
@@ -157,48 +172,16 @@ function validateDockerBuildCachePolicy(workflowPath) {
 function validateContainerSmokeWorkflow(workflowPath) {
   const workflow = readText(workflowPath);
 
-  if (!/\n\s*pull_request:\s*\n\s*branches:\s*\[main\]/.test(workflow)) {
-    fail(`${workflowPath} must run directly on pull_request for main so Container Smoke is visible as a PR check.`);
+  if (!workflow.includes("  workflow_call:") || /^  (pull_request|workflow_run):/m.test(workflow)) fail(`${workflowPath} must be reusable-only.`);
+  if (/listForRef|getCombinedStatusForRef|maxAttempts|waitMs|setTimeout|^concurrency:/m.test(workflow)) fail(`${workflowPath} must not poll checks or override caller concurrency.`);
+  const callerPath = ".github/workflows/test.yml";
+  const caller = readText(callerPath);
+  const smoke = caller.match(/^  container-smoke:\n[\s\S]*?(?=^  [a-z][\w-]*:)/m)?.[0] || "";
+  for (const dependency of ["changes", "backend-test", "frontend-build", "e2e"]) {
+    if (!smoke.match(/needs: \[([^\]]+)\]/)?.[1].split(",").map((value) => value.trim()).includes(dependency)) fail(`${callerPath} container-smoke.needs must include ${dependency}.`);
   }
-
-  if (/\n\s*workflow_run:/.test(workflow)) {
-    fail(`${workflowPath} must not use workflow_run; it hides Container Smoke from PR check rollups and creates duplicate post-check runs.`);
-  }
-
-  if (!workflow.includes("Wait for required PR checks")) {
-    fail(`${workflowPath} must wait for Backend Tests, Frontend Build, and Playwright E2E before running smoke on PRs.`);
-  }
-
-  if (!workflow.includes("name === checkName || name.endsWith(` / ${checkName}`)")) {
-    fail(`${workflowPath} must recognize exact and reusable-workflow-suffixed required check names.`);
-  }
-
-  if (!workflow.includes("const e2eAggregateCheck = 'Playwright E2E Result';")) {
-    fail(`${workflowPath} must require the Playwright E2E aggregate check.`);
-  }
-
-  if (
-    !workflow.includes("const e2eRelevant = '${{ steps.pr_changes.outputs.e2e }}' === 'true';") ||
-    !workflow.includes('if (!e2eRelevant)')
-  ) {
-    fail(`${workflowPath} must preserve E2E skip behavior for non-E2E-relevant changes.`);
-  }
-
-  if (
-    !workflow.includes("if (e2eAggregate?.conclusion !== 'success')") ||
-    !workflow.includes("if (['error', 'failure'].includes(legacyE2EStatus?.state))") ||
-    workflow.includes('legacyE2ERun')
-  ) {
-    fail(`${workflowPath} must require the E2E aggregate and honor legacy commit-status failures without a check-run fallback.`);
-  }
-
-  if (!workflow.includes('github.rest.repos.getCombinedStatusForRef')) {
-    fail(`${workflowPath} must recognize the legacy Playwright E2E commit status.`);
-  }
-
-  if (!workflow.includes("legacyE2EStatus?.state === 'success'")) {
-    fail(`${workflowPath} must accept a successful legacy Playwright E2E commit status.`);
-  }
+  if (!smoke.includes("if: needs.changes.outputs.smoke == 'true'")) fail(`${callerPath} must filter PR smoke relevance.`);
+  requireTextPattern(callerPath, /name: Container Smoke\n[\s\S]*?if: always\(\)[\s\S]*?needs: \[changes, container-smoke\]/, "must preserve the stable smoke result status");
 
   for (const imageName of ["backend", "frontend"]) {
     const cacheFrom = `cache-from: type=gha,scope=container-smoke-${imageName}`;

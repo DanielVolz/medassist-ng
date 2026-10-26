@@ -300,76 +300,76 @@ test("release preflight rejects a legacy Playwright status publisher without the
   }
 });
 
-test("release preflight rejects a smoke gate without the legacy Playwright status fallback", () => {
+test("release preflight rejects a smoke caller without the E2E dependency", () => {
   const fixtureRoot = copyFixture();
   try {
-    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/test.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "legacyE2EStatus?.state === 'success'",
-      "legacyE2EStatus?.state === 'passed'"
+      "needs: [changes, backend-test, frontend-build, e2e]",
+      "needs: [changes, backend-test, frontend-build]"
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must accept a successful legacy Playwright E2E commit status/
+      /\.github\/workflows\/test\.yml container-smoke.needs must include e2e/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
 
-test("release preflight rejects a smoke gate without the Playwright E2E aggregate", () => {
+test("release preflight rejects smoke that does not use produced digests", () => {
   const fixtureRoot = copyFixture();
   try {
-    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/docker-build.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "const e2eAggregateCheck = 'Playwright E2E Result';",
-      "const e2eAggregateCheck = 'Playwright E2E Summary';"
+      "image_source: published",
+      "image_source: build"
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must require the Playwright E2E aggregate check/
+      /must smoke exact produced digest refs/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
 
-test("release preflight rejects a smoke gate that treats a missing E2E aggregate as success", () => {
+test("release preflight rejects promotion without successful smoke", () => {
   const fixtureRoot = copyFixture();
   try {
-    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/docker-build.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "if (e2eAggregate?.conclusion !== 'success')",
-      "if (e2eAggregate?.conclusion === 'success')"
+      "needs: [resolve-digests, container-smoke]",
+      "needs: [resolve-digests]"
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must require the E2E aggregate and honor legacy commit-status failures/
+      /promotion must depend on successful smoke/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
 });
 
-test("release preflight rejects a smoke gate that does not preserve non-E2E skip behavior", () => {
+test("release preflight rejects a smoke caller that bypasses relevance", () => {
   const fixtureRoot = copyFixture();
   try {
-    const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
+    const workflowPath = path.join(fixtureRoot, ".github/workflows/test.yml");
     const workflow = readFileSync(workflowPath, "utf8").replace(
-      "if (!e2eRelevant)",
-      "if (e2eRelevant)"
+      "if: needs.changes.outputs.smoke == 'true'",
+      "if: needs.changes.outputs.smoke != 'true'"
     );
     writeFileSync(workflowPath, workflow);
 
     expectPreflightFailure(
       fixtureRoot,
-      /\.github\/workflows\/container-smoke\.yml must preserve E2E skip behavior for non-E2E-relevant changes/
+      /must filter PR smoke relevance/
     );
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -398,14 +398,51 @@ test("release preflight rejects hidden workflow-run container smoke", () => {
   try {
     const workflowPath = path.join(fixtureRoot, ".github/workflows/container-smoke.yml");
     const workflow = readFileSync(workflowPath, "utf8")
-      .replace("pull_request:", "workflow_run:\n    workflows: ['Test', 'E2E Tests']\n    types: [completed]")
+      .replace("workflow_call:", "workflow_run:\n    workflows: ['Test']\n    types: [completed]")
       .replace("    branches: [main]\n", "");
     writeFileSync(workflowPath, workflow);
 
-    expectPreflightFailure(fixtureRoot, /\.github\/workflows\/container-smoke\.yml must run directly on pull_request/);
+    expectPreflightFailure(fixtureRoot, /must be reusable-only/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }
+});
+
+for (const [original, replacement, message] of [
+  ["push-by-digest=true", "push-by-digest=false", /must upload candidates by digest only/],
+  ["labels: ${{ steps.meta.outputs.labels }}", "tags: ${{ steps.meta.outputs.tags }}", /must not tag candidates before smoke/],
+  ["--static-only", "--not-static", /must run static preflight before candidate upload/],
+  ['"${tags[@]}" "$source_ref"', '"${tags[@]}" "$source_ref" extra:source', /must promote a single tested source/],
+  ['test "sha256:$actual" = "${source_ref##*@}"', 'test -n "$actual"', /must verify promoted tags/],
+  ["flavor: latest=false", "flavor: latest=auto", /prereleases must not move latest/],
+  ["prerelease == 'true'", "prerelease == 'false'", /release must use the preflight prerelease classification/],
+  ['"$image_tag" == latest && "$release_tag" == *-*', '"$image_tag" == never', /manual prereleases must not move latest/],
+  ["platforms: linux/amd64,linux/arm64", "platforms: linux/amd64", /must preserve multiarch builds and attestations/],
+]) {
+  test(`release preflight rejects unsafe publication change: ${original}`, () => {
+    const root = copyFixture();
+    try {
+      const workflowPath = path.join(root, ".github/workflows/docker-build.yml");
+      const workflow = readFileSync(workflowPath, "utf8");
+      assert.ok(workflow.includes(original));
+      writeFileSync(workflowPath, workflow.replace(original, replacement));
+      expectPreflightFailure(root, message);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+test("release tag policy classifies any prerelease and blocks manual latest from prerelease sources", () => {
+  const root = copyFixture();
+  try {
+    const workflow = readFileSync(path.join(root, ".github/workflows/docker-build.yml"), "utf8");
+    const policy = workflow.match(/      - name: Resolve release policy[\s\S]*?        run: \|\n([\s\S]*?)\n  #/)[1].split("npm run release:preflight")[0];
+    const output = path.join(root, "policy-output");
+    const env = { ...process.env, GITHUB_OUTPUT: output, GITHUB_EVENT_NAME: "push", GITHUB_REF: `refs/tags/v${releaseVersion}-preview.1`, REQUESTED_TAG: "", CREATE_RELEASE: "false" };
+    execFileSync("bash", ["-e", "-c", policy], { cwd: root, env });
+    assert.match(readFileSync(output, "utf8"), /prerelease=true/);
+    writeJson(root, "backend/package.json", { ...readJson(root, "backend/package.json"), version: `${releaseVersion}-preview.1` });
+    assert.throws(() => execFileSync("bash", ["-e", "-c", policy], { cwd: root, env: { ...env, GITHUB_EVENT_NAME: "workflow_dispatch", REQUESTED_TAG: "latest" }, stdio: "pipe" }));
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("release preflight rejects fatal container smoke cache export", () => {

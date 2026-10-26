@@ -36,7 +36,7 @@ After creating a PR, use this bounded state machine:
 
 1. Query the current PR once with headRefOid, statusCheckRollup, mergeable, and mergeStateStatus.
 2. If statusCheckRollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN, squash-merge immediately.
-3. If statusCheckRollup is SUCCESS but mergeStateStatus is BLOCKED, inspect the blocker once, report it, and stop. Do not poll an unchanged blocked PR.
+3. If statusCheckRollup is SUCCESS but mergeStateStatus is BLOCKED, inspect the blocker once. Resolve authorized operational blockers using `medassist-release-ci-monitoring`; escalate only an unresolved blocker. Do not poll an unchanged blocked PR.
 4. If checks are pending, use a bounded continuous watch such as `gh pr checks --watch --interval 30`. Allow up to 45 minutes; pending checks are not an access failure. If the watch times out, report the exact pending checks without claiming completion.
 5. Inspect individual checks only after a failed rollup, changed head, or concrete blocker. Never bypass a blocked merge state.
 

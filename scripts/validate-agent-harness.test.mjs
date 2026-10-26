@@ -376,3 +376,55 @@ test("the CLI exits non-zero and prints actionable failures", async (testContext
     },
   );
 });
+
+test("documents coordinator end-to-end ownership and specialist remote ownership", async () => {
+  const source = await readFile(new URL("../AGENTS.md", import.meta.url), "utf8");
+
+  assert.match(source, /top-level coordinator retains end-to-end ownership across specialist returns/);
+  assert.match(source, /Only `release-manager` executes remote shipping operations/);
+  assert.match(source, /A specialist handoff, draft status, failed check, or running check is not completion/);
+});
+
+test("documents dependency preflight and stacked PR revalidation", async () => {
+  const source = await readFile(
+    new URL("../.github/skills/medassist-release-ci-monitoring/SKILL.md", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /Before broad tests or branch updates, read each PR's draft status, base branch and SHA, head branch and SHA, conflicts, and relationship to other requested PRs/);
+  assert.match(source, /merge prerequisites first, then reconcile the next PR against the intended base/);
+  assert.match(source, /Refresh its head and CI evidence/);
+});
+
+test("documents narrow reproduction and full upstream CI on the final head", async () => {
+  const [triage, monitoring] = await Promise.all([
+    readFile(new URL("../.github/skills/medassist-test-ci-triage/SKILL.md", import.meta.url), "utf8"),
+    readFile(new URL("../.github/skills/medassist-release-ci-monitoring/SKILL.md", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(triage, /Reproduce the narrow failure locally at the reported head/);
+  assert.match(triage, /After a repair, rerun the narrow reproducer first/);
+  assert.match(triage, /require full upstream CI on its final head/);
+  assert.match(monitoring, /full current-head upstream gates before merging/);
+});
+
+test("documents bounded pending CI watch and authorized blocker resolution", async () => {
+  const [manager, monitoring] = await Promise.all([
+    readFile(new URL("../.github/agents/release-manager.agent.md", import.meta.url), "utf8"),
+    readFile(new URL("../.github/skills/medassist-release-ci-monitoring/SKILL.md", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(manager, /use a bounded continuous watch such as `gh pr checks --watch --interval 30`/);
+  assert.match(monitoring, /with a maximum of 45 minutes/);
+  assert.match(manager, /pending checks are not an access failure/);
+  assert.match(monitoring, /Resolve authorized draft-readiness or base-update blockers/);
+  assert.match(monitoring, /diagnose other release-operational failures without bypassing gates/);
+});
+
+test("documents bounded stale-output retry and safe alternative evidence sources", async () => {
+  const source = await readFile(new URL("../AGENTS.md", import.meta.url), "utf8");
+
+  assert.match(source, /If a command returns unrelated, stale, or malformed output, do not treat it as execution evidence/);
+  assert.match(source, /Allow at most one discriminating retry, then change the execution session or transport, or use an independent read-only source/);
+  assert.match(source, /Do not interrupt unidentified user jobs or send pager input blindly/);
+});

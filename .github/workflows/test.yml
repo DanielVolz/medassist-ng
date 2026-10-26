@@ -5,6 +5,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: test-${{ github.event.pull_request.number || format('{0}-{1}', github.run_id, github.run_attempt) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Minimal permissions for security
 permissions:
   contents: read
@@ -25,11 +29,24 @@ jobs:
       agent-harness: ${{ steps.filter.outputs.agent-harness }}
       e2e-selector: ${{ steps.filter.outputs.e2e-selector }}
       knip: ${{ steps.filter.outputs.knip }}
+      smoke: ${{ steps.filter.outputs.smoke }}
     steps:
       - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
+            smoke:
+              - 'backend/**'
+              - 'frontend/**'
+              - 'shared/**'
+              - 'package*.json'
+              - 'release-policy.json'
+              - '.dockerignore'
+              - 'docker-compose*.yml'
+              - 'scripts/*release-preflight.mjs'
+              - '.github/workflows/test.yml'
+              - '.github/workflows/container-smoke.yml'
+              - '.github/workflows/docker-build.yml'
             backend:
               - 'backend/**'
               - 'shared/**'
@@ -282,6 +299,32 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+
+  container-smoke:
+    name: Container Runtime
+    needs: [changes, backend-test, frontend-build, e2e]
+    if: needs.changes.outputs.smoke == 'true'
+    uses: ./.github/workflows/container-smoke.yml
+    with:
+      image_source: build
+    permissions:
+      contents: read
+      packages: read
+
+  container-smoke-result:
+    name: Container Smoke
+    if: always()
+    needs: [changes, container-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require successful relevant smoke or explicit no-op
+        run: |
+          if [ "${{ needs.changes.result }}" != success ]; then exit 1; fi
+          if [ "${{ needs.changes.outputs.smoke }}" != true ]; then
+            echo "No smoke-relevant changes; runtime checks were not run."
+          else
+            test "${{ needs.container-smoke.result }}" = success
+          fi
 
   legacy-playwright-e2e-status:
     name: Publish legacy Playwright E2E status

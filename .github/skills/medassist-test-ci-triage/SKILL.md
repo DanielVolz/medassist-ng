@@ -24,6 +24,12 @@ Do not perform remote git, PR, tag, or release operations.
   environment, or workflow infrastructure.
 - Reproduce the narrow failure locally at the reported head. Load test design or
   local validation only when needed for that next phase.
+- Before broad validation, use the coordinator's PR dependency preflight to
+  confirm the intended head/base. Reconcile obsolete bases first; do not spend
+  a full suite run validating a known superseded branch state.
+- After a repair, rerun the narrow reproducer first. Widen only for the affected
+  scope and required gates. Record the tested SHA and commands so the release
+  owner can push the same change and require full upstream CI on its final head.
 - Send product repairs to the appropriate implementation owner; retain continuous
   testing ownership through deterministic revalidation.
 - Hand a green result, commands, and remaining risk to `@release-manager`.

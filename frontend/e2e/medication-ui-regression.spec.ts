@@ -172,7 +172,11 @@ async function checkEditorGeometry(
 	await expect(scheduleTab).toHaveAttribute("aria-selected", "true");
 	await expect(editor.locator(".blister-row")).toHaveCount(8);
 	await expect(editor.getByRole("tabpanel")).toHaveCount(1);
-	await expect(editor.locator('[role="tabpanel"][aria-hidden="true"]')).toHaveCount(3);
+	if (isMobile) {
+		await expect(editor.locator('[role="tabpanel"][aria-hidden="true"]')).toHaveCount(3);
+	} else {
+		await expect(editor.locator('[role="tabpanel"][hidden]')).toHaveCount(3);
+	}
 
 	const prescriptionTab = editor.getByRole("tab", { name: /Prescription/i });
 	await page.keyboard.press("ArrowRight");
@@ -324,7 +328,7 @@ test.describe("Medication editor UI regressions", () => {
 
 		test("returns focus after create and announces the successful save", async ({ page }) => {
 			await navigateToMedicationList(page);
-			const createTrigger = page.getByRole("button", { name: "New medication", exact: true });
+			const createTrigger = page.locator('[data-medication-create="true"]');
 			await createTrigger.click();
 			const editor = page.locator('aside[data-open="true"]');
 			const heading = editor.getByRole("heading", { name: "New medication" });

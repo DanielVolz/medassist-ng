@@ -7,6 +7,12 @@ description: Use only after a PR exists to monitor required CI, merge readiness,
 
 Use only after a PR exists. Do not use for release versioning, note drafting, tags, or GitHub release publication.
 
+## Dependency Preflight
+
+- Before broad tests or branch updates, read each PR's draft status, base branch and SHA, head branch and SHA, conflicts, and relationship to other requested PRs. Record dependency order in the compact state below.
+- Reconcile stale bases before expensive validation. Preserve independent changes and do not delete or recreate PRs merely to clear a draft or failed check.
+- For stacked PRs, merge prerequisites first, then reconcile the next PR against the intended base. Refresh its head and CI evidence; checks on the previous head/base are not evidence for the reconciled change.
+
 ## Authoritative PR Gate
 
 When the user reports that a PR is green, perform one authenticated PR-level query for the current head containing headRefOid, statusCheckRollup, mergeable, and mergeStateStatus. Treat the PR as green only when statusCheckRollup is SUCCESS, mergeable is MERGEABLE, and mergeStateStatus is CLEAN. Do not enumerate individual checks when this aggregate gate is successful. Inspect individual check details only when the aggregate is not successful, the head changed, or GitHub reports a concrete blocker.
@@ -21,7 +27,9 @@ Maintain one compact record:
 { remote, branch, headSHA, prUrl, latestStateOrResult, nextAction }
 ```
 
-Use a bounded continuous watch while checks are pending, for example `gh pr checks --watch --interval 30`, with a maximum of 45 minutes. Do not stop after an arbitrary number of status reads while the authorized merge is still actionable. On timeout, report the exact pending checks and incomplete operation. If the rollup is successful but mergeStateStatus is BLOCKED, inspect and report the blocker once; never poll an unchanged blocked PR.
+Use a bounded continuous watch while checks are pending, for example `gh pr checks --watch --interval 30`, with a maximum of 45 minutes. Do not stop after an arbitrary number of status reads while the authorized merge is still actionable. On timeout, report the exact pending checks and incomplete operation. If the rollup is successful but mergeStateStatus is BLOCKED, inspect the blocker once. Resolve authorized draft-readiness or base-update blockers, then refresh the gate; never bypass required reviews, branch protection, or failed checks, and never poll an unchanged blocked PR.
+
+For an authorized repair-and-merge request, a failed test check triggers a compact repair handoff to the coordinator for `testing-manager`, not a terminal status report. Include the exact head, failing job/test, logs, and dependency state. Specialists remain non-recursive: the coordinator resumes the same operation after the focused repair and local validation. Use `medassist-test-local-validation` for local execution; push the validated repair and require full current-head upstream gates before merging. If the repair bound is exhausted, report the unresolved operation as incomplete.
 
 Prefer the authenticated `gh` CLI, including OS-keyring authentication. Missing MCP tools or token environment variables are not evidence of missing access. Before declaring an access blocker, execute a read through the chosen transport and retain the actual error; never print or extract credentials.
 
@@ -31,3 +39,4 @@ Prefer the authenticated `gh` CLI, including OS-keyring authentication. Missing 
 - Hand only test/E2E failures to `@testing-manager`; retain the current-head record for repairs and diagnose other release-operational failures without bypassing gates.
 - When authorized and the gate is green, invoke the squash merge against the verified head (for example, `gh pr merge --squash --match-head-commit <headSHA>`). A green status or a handoff is not completion: read the PR again and require `MERGED`, its merge commit, and requested traceability before reporting success. Delete the merged branch when safe.
 - Re-sync local `main` only when requested, then remove task worktrees and temporary state.
+- For requested local synchronization, fetch the authoritative remote and fast-forward `main` without discarding user changes. Verify the local SHA equals the fetched remote SHA and inspect worktree status. Remove only task-owned temporary state; preserve existing worktrees, local-only refs, and stashes.

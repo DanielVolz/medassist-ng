@@ -1,8 +1,6 @@
 name: Container Smoke
 
 on:
-  pull_request:
-    branches: [main]
   workflow_call:
     inputs:
       image_source:
@@ -21,163 +19,12 @@ on:
         type: string
         default: ''
 
-concurrency:
-  group: container-smoke-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
-  checks: read
-  pull-requests: read
 
 jobs:
-  gate:
-    name: Evaluate CI Gate
-    runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.pr_required_check_gate.outputs.should_run || steps.workflow_call_gate.outputs.should_run || 'false' }}
-    steps:
-      - name: Allow smoke when called as reusable workflow
-        id: workflow_call_gate
-        if: github.event_name != 'pull_request'
-        run: echo "should_run=true" >> "$GITHUB_OUTPUT"
-
-      - name: Detect PR smoke relevance
-        id: pr_changes
-        if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
-        with:
-          filters: |
-            smoke:
-              - 'backend/**'
-              - 'frontend/**'
-              - 'shared/**'
-              - 'package.json'
-              - 'release-policy.json'
-              - 'docker-compose.yml'
-              - 'docker-compose.dev.yml'
-              - '.github/workflows/container-smoke.yml'
-              - '.github/workflows/docker-build.yml'
-            e2e:
-              - 'backend/**'
-              - 'frontend/**'
-              - 'shared/**'
-              - 'package.json'
-              - 'release-policy.json'
-              - 'biome.json'
-              - '.github/workflows/e2e.yml'
-
-      - name: Wait for required PR checks
-        id: pr_required_check_gate
-        if: github.event_name == 'pull_request' && steps.pr_changes.outputs.smoke == 'true'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const ref = context.payload.pull_request.head.sha;
-            const e2eRelevant = '${{ steps.pr_changes.outputs.e2e }}' === 'true';
-            const requiredChecks = ['Backend Tests', 'Frontend Build'];
-            const e2eAggregateCheck = 'Playwright E2E Result';
-            const legacyE2ECheck = 'Playwright E2E';
-            const terminalFailures = new Set(['action_required', 'cancelled', 'failure', 'neutral', 'skipped', 'stale', 'startup_failure', 'timed_out']);
-            const maxAttempts = 80;
-            const waitMs = 15000;
-
-            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-              const response = await github.rest.checks.listForRef({
-                owner,
-                repo,
-                ref,
-                per_page: 100,
-              });
-
-              const checkMap = new Map();
-              for (const run of response.data.check_runs) {
-                if (!checkMap.has(run.name) || run.completed_at) {
-                  checkMap.set(run.name, {
-                    conclusion: run.conclusion,
-                    status: run.status,
-                  });
-                }
-              }
-
-              const statusResponse = await github.rest.repos.getCombinedStatusForRef({
-                owner,
-                repo,
-                ref,
-              });
-              const legacyE2EStatus = statusResponse.data.statuses.find((status) => status.context === legacyE2ECheck);
-
-              const waitingFor = [];
-              for (const checkName of requiredChecks) {
-                const check = Array.from(checkMap.entries()).find(
-                  ([name]) => name === checkName || name.endsWith(` / ${checkName}`)
-                )?.[1];
-                core.info(`${checkName}: ${check?.status ?? 'missing'} / ${check?.conclusion ?? 'pending'}`);
-                if (check?.conclusion === 'success') {
-                  continue;
-                }
-                if (check?.conclusion && terminalFailures.has(check.conclusion)) {
-                  core.info(`${checkName} concluded ${check.conclusion}; skipping Container Smoke because the PR is already blocked.`);
-                  core.setOutput('should_run', 'false');
-                  return;
-                }
-                waitingFor.push(checkName);
-              }
-
-              if (!e2eRelevant) {
-                core.info('Playwright E2E: not relevant; preserving the workflow skip behavior.');
-              } else {
-                const e2eAggregate = Array.from(checkMap.entries()).find(
-                  ([name]) => name === e2eAggregateCheck || name.endsWith(` / ${e2eAggregateCheck}`)
-                )?.[1];
-                core.info(`${e2eAggregateCheck}: ${e2eAggregate?.status ?? 'missing'} / ${e2eAggregate?.conclusion ?? 'pending'}`);
-                core.info(`${legacyE2ECheck} commit status: ${legacyE2EStatus?.state ?? 'missing'}`);
-
-                if (['error', 'failure'].includes(legacyE2EStatus?.state)) {
-                  core.info(`${legacyE2ECheck} commit status failed; skipping Container Smoke even if its publisher check run succeeded.`);
-                  core.setOutput('should_run', 'false');
-                  return;
-                }
-
-                if (e2eAggregate?.conclusion && terminalFailures.has(e2eAggregate.conclusion)) {
-                  core.info(`${e2eAggregateCheck} concluded ${e2eAggregate.conclusion}; skipping Container Smoke because the PR is already blocked.`);
-                  core.setOutput('should_run', 'false');
-                  return;
-                }
-
-                if (e2eAggregate?.conclusion !== 'success') {
-                  waitingFor.push(e2eAggregateCheck);
-                }
-                if (legacyE2EStatus?.state !== 'success') {
-                  waitingFor.push(legacyE2ECheck);
-                }
-
-                if (e2eAggregate?.conclusion === 'success' && legacyE2EStatus?.state === 'success') {
-                  core.info('Playwright E2E aggregate and legacy commit status succeeded.');
-                }
-              }
-
-              if (waitingFor.length === 0) {
-                core.setOutput('should_run', 'true');
-                return;
-              }
-
-              core.info(`Waiting for required checks before Container Smoke: ${waitingFor.join(', ')} (attempt ${attempt}/${maxAttempts})`);
-              await new Promise((resolve) => setTimeout(resolve, waitMs));
-            }
-
-            core.setFailed(`Timed out waiting for required PR checks before Container Smoke on ${ref}.`);
-
-      - name: Skip smoke when required checks are not all green
-        if: github.event_name == 'pull_request' && (steps.pr_changes.outputs.smoke != 'true' || steps.pr_required_check_gate.outputs.should_run != 'true')
-        run: echo "Skipping Container Smoke because this PR is not smoke-relevant or required checks are not all successful."
-
   smoke:
     name: Container Smoke
-    needs: gate
-    if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -188,6 +35,21 @@ jobs:
       FRONTEND_LOCAL_TAG: medassist-ng-frontend-smoke:${{ github.sha }}
 
     steps:
+      - name: Validate smoke inputs
+        env:
+          IMAGE_SOURCE: ${{ inputs.image_source }}
+          BACKEND_REF: ${{ inputs.backend_image_ref }}
+          FRONTEND_REF: ${{ inputs.frontend_image_ref }}
+        run: |
+          case "$IMAGE_SOURCE" in
+            build) ;;
+            published)
+              [[ "$BACKEND_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]]
+              [[ "$FRONTEND_REF" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$ ]]
+              ;;
+            *) echo "Unsupported smoke image source"; exit 1 ;;
+          esac
+
       - name: Checkout repository
         if: inputs.image_source != 'published'
         uses: actions/checkout@v7
@@ -205,14 +67,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Validate published image references
-        if: inputs.image_source == 'published'
-        run: |
-          if [ -z "${{ inputs.backend_image_ref }}" ] || [ -z "${{ inputs.frontend_image_ref }}" ]; then
-            echo "Published smoke mode requires both backend_image_ref and frontend_image_ref."
-            exit 1
-          fi
 
       - name: Prepare smoke artifact directory
         run: mkdir -p smoke-logs

@@ -259,6 +259,10 @@ Skill files:
 - Allow at most one focused repair pass. Escalate only when a focused check fails or evidence expands the risk.
 - Keep one compact task context: objective, controlling files, evidence, falsifying check, and next action. Refresh only changed facts.
 - `release-manager` owns PRs, merges, releases, and workflow monitoring. `testing-manager` owns test design, execution, and test CI triage.
+- The top-level coordinator retains end-to-end ownership across specialist returns. For an authorized repair-and-merge request, coordinate repair, focused local validation, push, current-head CI, verified merge, and requested local synchronization through the owning specialists. Only `release-manager` executes remote shipping operations. A specialist handoff, draft status, failed check, or running check is not completion.
+- Inspect PR base/head relationships, conflicts, and dependency order before expensive validation. Reconcile an obsolete base before broad tests, and revalidate dependent PRs after predecessor merges. A merge-only request does not authorize unrelated product changes or bypassing review requirements.
+- Apply the existing focused-repair and CI-watch bounds. When exhausted, report the exact unresolved blocker, attempted repair or watch, current head, and next owner as incomplete; do not imply success. Continue authorized operational fixes such as draft readiness and base reconciliation without requesting the same authorization again.
+- If a command returns unrelated, stale, or malformed output, do not treat it as execution evidence. Allow at most one discriminating retry, then change the execution session or transport, or use an independent read-only source. Do not interrupt unidentified user jobs or send pager input blindly. Report an evidence gap if no reliable alternative exists.
 
 ## Cost-Aware Model Orchestration
 

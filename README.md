@@ -18,8 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Backend_Tests-1087%2F1087-brightgreen?logo=vitest" alt="Backend Tests 454/454" />
-  <img src="https://img.shields.io/badge/Frontend_Tests-1247%2F1247-brightgreen?logo=vitest" alt="Frontend Tests 611/611" />
+  <a href="https://github.com/DanielVolz/medassist-ng/actions/workflows/test.yml"><img src="https://github.com/DanielVolz/medassist-ng/actions/workflows/test.yml/badge.svg?branch=main" alt="Test workflow" /></a>
   <a href="docs/ACCESSIBILITY_TESTING.md"><img src="https://img.shields.io/badge/WCAG_2.1-AA_verified-brightgreen?logo=w3c" alt="WCAG 2.1 AA: verified" /></a>
 </p>
 

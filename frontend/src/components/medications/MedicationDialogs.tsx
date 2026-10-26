@@ -13,6 +13,7 @@ type MedicationDialogsProps = {
 	unsavedTitle: string;
 	onConfirmClose: () => void;
 	onCancelClose: () => void;
+	onUnsavedConfirmExit: () => void;
 	showNoScheduleConfirm: boolean;
 	noScheduleTitle: string;
 	noScheduleMessage: string;
@@ -20,6 +21,7 @@ type MedicationDialogsProps = {
 	noScheduleCancelLabel: string;
 	onConfirmNoSchedule: () => void;
 	onCancelNoSchedule: () => void;
+	onNoScheduleConfirmExit: () => void;
 	showObsoleteConfirm: boolean;
 	obsoleteCandidate: Medication | null;
 	obsoleteTitle: string;
@@ -28,6 +30,7 @@ type MedicationDialogsProps = {
 	obsoleteCancelLabel: string;
 	onConfirmMarkObsolete: () => void;
 	onCancelMarkObsolete: () => void;
+	onObsoleteConfirmExit: () => void;
 	showDeleteConfirm: boolean;
 	deleteCandidate: Medication | null;
 	deleteTitle: string;
@@ -36,11 +39,13 @@ type MedicationDialogsProps = {
 	deleteCancelLabel: string;
 	onConfirmDelete: () => void;
 	onCancelDelete: () => void;
+	onDeleteConfirmExit: () => void;
 	showEditModal: boolean;
 	lightboxImage: { src: string; alt: string } | null;
 	onCloseLightbox: () => void;
 	showReportModal: boolean;
 	onCloseReportModal: () => void;
+	onReportModalExit: () => void;
 	medications: Medication[];
 };
 
@@ -53,6 +58,7 @@ export function MedicationDialogs({
 	unsavedTitle,
 	onConfirmClose,
 	onCancelClose,
+	onUnsavedConfirmExit,
 	showNoScheduleConfirm,
 	noScheduleTitle,
 	noScheduleMessage,
@@ -60,6 +66,7 @@ export function MedicationDialogs({
 	noScheduleCancelLabel,
 	onConfirmNoSchedule,
 	onCancelNoSchedule,
+	onNoScheduleConfirmExit,
 	showObsoleteConfirm,
 	obsoleteCandidate,
 	obsoleteTitle,
@@ -68,6 +75,7 @@ export function MedicationDialogs({
 	obsoleteCancelLabel,
 	onConfirmMarkObsolete,
 	onCancelMarkObsolete,
+	onObsoleteConfirmExit,
 	showDeleteConfirm,
 	deleteCandidate,
 	deleteTitle,
@@ -76,72 +84,79 @@ export function MedicationDialogs({
 	deleteCancelLabel,
 	onConfirmDelete,
 	onCancelDelete,
+	onDeleteConfirmExit,
 	showEditModal,
 	lightboxImage,
 	onCloseLightbox,
 	showReportModal,
 	onCloseReportModal,
+	onReportModalExit,
 	medications,
 }: MedicationDialogsProps) {
 	return (
 		<>
 			{mobileEditModal}
 
-			{showUnsavedConfirm && (
-				<ConfirmModal
-					title={unsavedTitle}
-					message={unsavedMessage}
-					confirmLabel={unsavedConfirmLabel}
-					cancelLabel={unsavedCancelLabel}
-					onConfirm={onConfirmClose}
-					onCancel={onCancelClose}
-					confirmVariant="danger"
-					overlayClassName={showEditModal ? "nested-confirm" : undefined}
-				/>
-			)}
+			<ConfirmModal
+				opened={showUnsavedConfirm}
+				title={unsavedTitle}
+				message={unsavedMessage}
+				confirmLabel={unsavedConfirmLabel}
+				cancelLabel={unsavedCancelLabel}
+				onConfirm={onConfirmClose}
+				onCancel={onCancelClose}
+				confirmVariant="danger"
+				onExitTransitionEnd={onUnsavedConfirmExit}
+				overlayClassName={showEditModal ? "nested-confirm" : undefined}
+			/>
 
-			{showObsoleteConfirm && obsoleteCandidate && (
-				<ConfirmModal
-					title={obsoleteTitle}
-					message={obsoleteMessage}
-					confirmLabel={obsoleteConfirmLabel}
-					cancelLabel={obsoleteCancelLabel}
-					onConfirm={onConfirmMarkObsolete}
-					onCancel={onCancelMarkObsolete}
-					confirmVariant="warning"
-					overlayClassName={showEditModal ? "nested-confirm" : undefined}
-				/>
-			)}
+			<ConfirmModal
+				opened={showObsoleteConfirm && !!obsoleteCandidate}
+				title={obsoleteTitle}
+				message={obsoleteMessage}
+				confirmLabel={obsoleteConfirmLabel}
+				cancelLabel={obsoleteCancelLabel}
+				onConfirm={onConfirmMarkObsolete}
+				onCancel={onCancelMarkObsolete}
+				confirmVariant="warning"
+				onExitTransitionEnd={onObsoleteConfirmExit}
+				overlayClassName={showEditModal ? "nested-confirm" : undefined}
+			/>
 
-			{showNoScheduleConfirm && (
-				<ConfirmModal
-					title={noScheduleTitle}
-					message={noScheduleMessage}
-					confirmLabel={noScheduleConfirmLabel}
-					cancelLabel={noScheduleCancelLabel}
-					onConfirm={onConfirmNoSchedule}
-					onCancel={onCancelNoSchedule}
-					confirmVariant="warning"
-					overlayClassName={showEditModal ? "nested-confirm" : undefined}
-				/>
-			)}
+			<ConfirmModal
+				opened={showNoScheduleConfirm}
+				title={noScheduleTitle}
+				message={noScheduleMessage}
+				confirmLabel={noScheduleConfirmLabel}
+				cancelLabel={noScheduleCancelLabel}
+				onConfirm={onConfirmNoSchedule}
+				onCancel={onCancelNoSchedule}
+				confirmVariant="warning"
+				onExitTransitionEnd={onNoScheduleConfirmExit}
+				overlayClassName={showEditModal ? "nested-confirm" : undefined}
+			/>
 
-			{showDeleteConfirm && deleteCandidate && (
-				<ConfirmModal
-					title={deleteTitle}
-					message={deleteMessage}
-					confirmLabel={deleteConfirmLabel}
-					cancelLabel={deleteCancelLabel}
-					onConfirm={onConfirmDelete}
-					onCancel={onCancelDelete}
-					confirmVariant="danger"
-					overlayClassName={showEditModal ? "nested-confirm" : undefined}
-				/>
-			)}
+			<ConfirmModal
+				opened={showDeleteConfirm && !!deleteCandidate}
+				title={deleteTitle}
+				message={deleteMessage}
+				confirmLabel={deleteConfirmLabel}
+				cancelLabel={deleteCancelLabel}
+				onConfirm={onConfirmDelete}
+				onCancel={onCancelDelete}
+				confirmVariant="danger"
+				onExitTransitionEnd={onDeleteConfirmExit}
+				overlayClassName={showEditModal ? "nested-confirm" : undefined}
+			/>
 
 			{lightboxImage && <Lightbox src={lightboxImage.src} alt={lightboxImage.alt} onClose={onCloseLightbox} />}
 
-			<ReportModal isOpen={showReportModal} onClose={onCloseReportModal} medications={medications} />
+			<ReportModal
+				isOpen={showReportModal}
+				onClose={onCloseReportModal}
+				onExitTransitionEnd={onReportModalExit}
+				medications={medications}
+			/>
 		</>
 	);
 }

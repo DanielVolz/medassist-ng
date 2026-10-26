@@ -81,7 +81,7 @@ describe("MedicationListSection", () => {
 			onRecordNow,
 		});
 
-		fireEvent.click(screen.getByRole("button", { name: "dose.take" }));
+		fireEvent.click(screen.getByRole("button", { name: "medications.list.actionRecordNow" }));
 		expect(onRecordNow).toHaveBeenCalledWith(eligible);
 		expect(screen.getAllByText("form.blisters.noRegularSchedule")).toHaveLength(1);
 	});
@@ -91,9 +91,10 @@ describe("MedicationListSection", () => {
 		const medication = createMedication({ id: 1, name: "Photo Med", imageUrl: "photo.webp" });
 
 		renderSection({ orderedMeds: [medication], onImagePreview });
-		fireEvent.click(screen.getByRole("button", { name: "Photo Med" }));
+		const imagePreviewButton = screen.getByRole("button", { name: "medications.list.actionPreviewImage" });
+		fireEvent.click(imagePreviewButton);
 
-		expect(onImagePreview).toHaveBeenCalledWith(medication);
+		expect(onImagePreview).toHaveBeenCalledWith(medication, imagePreviewButton);
 	});
 
 	it("does not make medication avatars clickable when no image is available", () => {

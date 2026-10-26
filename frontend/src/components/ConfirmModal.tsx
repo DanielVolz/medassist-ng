@@ -4,11 +4,13 @@
 
 import { Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
 import { AppModal, AppModalFooter } from "../ui/modal/AppModal";
 import { AppButton } from "../ui/primitives/AppButton";
 
 export interface ConfirmModalProps {
+	opened?: boolean;
 	title: string;
 	message: string | ReactNode;
 	confirmLabel: string;
@@ -19,9 +21,11 @@ export interface ConfirmModalProps {
 	confirmVariant?: "primary" | "danger" | "success" | "warning";
 	overlayClassName?: string;
 	captureEscape?: boolean;
+	onExitTransitionEnd?: () => void;
 }
 
 export function ConfirmModal({
+	opened = true,
 	title,
 	message,
 	confirmLabel,
@@ -32,15 +36,18 @@ export function ConfirmModal({
 	confirmVariant = "primary",
 	overlayClassName,
 	captureEscape = false,
+	onExitTransitionEnd,
 }: ConfirmModalProps) {
+	const { t } = useTranslation();
 	useEscapeKey(captureEscape, onCancel, { capture: true });
 	return (
 		<AppModal
-			closeButtonProps={{ "aria-label": "Close", disabled: captureEscape && isLoading }}
+			closeButtonProps={{ "aria-label": t("common.close"), disabled: captureEscape && isLoading }}
 			closeOnEscape={false}
 			manageEscape={!captureEscape}
 			onClose={onCancel}
-			opened
+			opened={opened}
+			onExitTransitionEnd={onExitTransitionEnd}
 			rootClassName={overlayClassName}
 			size="sm"
 			title={title}

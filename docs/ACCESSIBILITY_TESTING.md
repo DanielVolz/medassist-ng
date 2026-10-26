@@ -27,6 +27,15 @@ Place the mouse out of reach and complete these flows using only `Tab`,
 
 ## Screen Reader Testing
 
+### Medications Page
+
+- [ ] Active and obsolete medication cards are announced as named list items.
+- [ ] Row actions identify both the action and medication; image buttons identify that they open the medication image.
+- [ ] The obsolete-medication disclosure announces its expanded state and controls the named obsolete list.
+- [ ] The desktop editor is announced as a complementary landmark named by its heading.
+- [ ] Only the selected editor tab is in the Tab order; arrow keys, Home, and End move selection and focus together.
+- [ ] Closing the editor returns focus to its invoking action; after create, delete, obsolete, or reactivate, focus lands on a visible, relevant medication-page control or row.
+
 ### Dashboard
 
 - [ ] Medication cards and stock status are announced as lists/headings.

@@ -43,10 +43,18 @@ function createPersonFilterMedications(): Medication[] {
 	];
 }
 
-function renderReportModal(options: { onClose?: () => void; medications?: Medication[] } = {}) {
+function renderReportModal(
+	options: { onClose?: () => void; onExitTransitionEnd?: () => void; medications?: Medication[] } = {}
+) {
 	const onClose = options.onClose ?? vi.fn();
+	const onExitTransitionEnd = options.onExitTransitionEnd ?? vi.fn();
 	const view = render(
-		<ReportModal isOpen={true} onClose={onClose} medications={options.medications ?? [createMedication()]} />
+		<ReportModal
+			isOpen={true}
+			onClose={onClose}
+			onExitTransitionEnd={onExitTransitionEnd}
+			medications={options.medications ?? [createMedication()]}
+		/>
 	);
 
 	return { ...view, onClose };
@@ -65,7 +73,9 @@ describe("ReportModal", () => {
 
 	it("renders and closes when cancel is clicked", () => {
 		const onClose = vi.fn();
-		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+		render(
+			<ReportModal isOpen={true} onClose={onClose} onExitTransitionEnd={vi.fn()} medications={[createMedication()]} />
+		);
 
 		expect(screen.getByText(/report\.title/i)).toBeInTheDocument();
 		const closeButtons = screen.getAllByRole("button", { name: /common\.close/i });
@@ -79,7 +89,9 @@ describe("ReportModal", () => {
 		window.addEventListener("popstate", parentPopState);
 
 		try {
-			render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+			render(
+				<ReportModal isOpen={true} onClose={onClose} onExitTransitionEnd={vi.fn()} medications={[createMedication()]} />
+			);
 
 			act(() => {
 				window.dispatchEvent(new PopStateEvent("popstate"));
@@ -121,7 +133,9 @@ describe("ReportModal", () => {
 				}),
 			});
 
-			const view = render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+			const view = render(
+				<ReportModal isOpen={true} onClose={onClose} onExitTransitionEnd={vi.fn()} medications={[createMedication()]} />
+			);
 
 			fireEvent.click(
 				screen.getByRole("radio", { name: new RegExp(`report\\.format${format === "txt" ? "Txt" : "Md"}`, "i") })
@@ -164,6 +178,7 @@ describe("ReportModal", () => {
 			<ReportModal
 				isOpen={true}
 				onClose={onClose}
+				onExitTransitionEnd={vi.fn()}
 				medications={[
 					createMedication({
 						medicationStartDate: "2026-02-01",
@@ -208,6 +223,7 @@ describe("ReportModal", () => {
 			<ReportModal
 				isOpen={true}
 				onClose={onClose}
+				onExitTransitionEnd={vi.fn()}
 				medications={[
 					createMedication({
 						packageType: "bottle",
@@ -265,6 +281,7 @@ describe("ReportModal", () => {
 			<ReportModal
 				isOpen={true}
 				onClose={onClose}
+				onExitTransitionEnd={vi.fn()}
 				medications={[
 					createMedication({
 						packageType: "injection",
@@ -341,6 +358,7 @@ describe("ReportModal", () => {
 			<ReportModal
 				isOpen={true}
 				onClose={onClose}
+				onExitTransitionEnd={vi.fn()}
 				medications={[
 					createMedication({
 						medicationStartDate: "2026-03-01",
@@ -585,7 +603,9 @@ describe("ReportModal", () => {
 		const onClose = vi.fn();
 		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false });
 
-		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+		render(
+			<ReportModal isOpen={true} onClose={onClose} onExitTransitionEnd={vi.fn()} medications={[createMedication()]} />
+		);
 
 		fireEvent.click(screen.getByRole("radio", { name: /report\.formatMd/i }));
 		fireEvent.click(screen.getByRole("button", { name: /report\.generate/i }));
@@ -604,7 +624,9 @@ describe("ReportModal", () => {
 
 	it("shows a localized error and skips the request when the date range is invalid", async () => {
 		const onClose = vi.fn();
-		render(<ReportModal isOpen={true} onClose={onClose} medications={[createMedication()]} />);
+		render(
+			<ReportModal isOpen={true} onClose={onClose} onExitTransitionEnd={vi.fn()} medications={[createMedication()]} />
+		);
 
 		const inputs = screen.getAllByDisplayValue(/\d{2}\.\d{2}\.\d{4}|\d{1,2}\/\d{1,2}\/\d{4}|\d{4}-\d{2}-\d{2}/i);
 		const startInput = inputs[0] as HTMLInputElement;

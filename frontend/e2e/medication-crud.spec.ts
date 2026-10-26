@@ -360,7 +360,7 @@ test.describe("Medication CRUD", () => {
 			// Click Edit
 			const medRow = medicationRow(page, "Before Edit");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
-			await medRow.getByRole("button", { name: /Edit/i }).click();
+			await medRow.getByRole("button", { name: /^Edit\b/i }).click();
 
 			// Form title should say "Edit entry" (or legacy "Edit medication").
 			await expect(
@@ -390,7 +390,7 @@ test.describe("Medication CRUD", () => {
 			// Click Edit
 			const medRow = medicationRow(page, "Cancel Test Med");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
-			await medRow.getByRole("button", { name: /Edit/i }).click();
+			await medRow.getByRole("button", { name: /^Edit\b/i }).click();
 
 			// Change the name
 			await page.getByLabel(/(Commercial Name|form\.commercialName)/i).fill("Modified Name");
@@ -424,7 +424,7 @@ test.describe("Medication CRUD", () => {
 			const medRow = medicationRow(page, "Delete Me Med");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
 
-			await medRow.getByRole("button", { name: /Delete/i }).click();
+			await medRow.getByRole("button", { name: /^Delete\b/i }).click();
 			await page.getByTestId("confirm-modal-confirm").click();
 
 			// Medication should be removed
@@ -441,7 +441,7 @@ test.describe("Medication CRUD", () => {
 			const medRow = medicationRow(page, "Keep Me Med");
 			await expect(medRow).toBeVisible({ timeout: 10000 });
 
-			await medRow.getByRole("button", { name: /Delete/i }).click();
+			await medRow.getByRole("button", { name: /^Delete\b/i }).click();
 			await page.getByTestId("confirm-modal-cancel").click();
 
 			// Medication should still be there

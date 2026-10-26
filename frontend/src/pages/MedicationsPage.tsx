@@ -82,6 +82,23 @@ function userStorageKey(userId: number | undefined, key: string): string {
 
 const OBSOLETE_SECTION_STORAGE_KEY = "medicationsShowObsolete";
 const OPEN_FDA_PACKAGE_CODE_PATTERN = /\s*\(([0-9A-Z]{4,}(?:-[0-9A-Z]{1,})+)\)\s*/gi;
+type MedicationPageFocusTarget = "create" | "obsolete-toggle" | { medicationId: number };
+
+function focusMedicationPageTarget(target: MedicationPageFocusTarget) {
+	window.requestAnimationFrame(() => {
+		let selector = '[data-medication-create="true"]';
+		if (target === "obsolete-toggle") selector = '[data-obsolete-toggle="true"]';
+		if (typeof target === "object") selector = `[data-medication-id="${target.medicationId}"]`;
+
+		const element = document.querySelector<HTMLElement>(selector);
+		if (element?.isConnected && element.getClientRects().length > 0) {
+			element.focus();
+			return;
+		}
+
+		document.querySelector<HTMLElement>('[data-medication-create="true"]')?.focus();
+	});
+}
 
 function normalizeMedicationEnrichmentDoseUnit(unit: MedicationEnrichmentStrengthOption["doseUnit"]): DoseUnit | null {
 	if (unit === "IU") return "units";
@@ -298,7 +315,15 @@ export function MedicationsPage() {
 	);
 	const [viewMode, setViewMode] = useState<"grid" | "form">(pendingEditTransition ? "form" : "grid");
 	const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null);
-	const closeLightbox = useCallback(() => setLightboxImage(null), []);
+	const lightboxReturnFocusRef = useRef<HTMLElement | null>(null);
+	const reportReturnFocusRef = useRef<HTMLElement | null>(null);
+	const closeLightbox = useCallback(() => {
+		setLightboxImage(null);
+		window.requestAnimationFrame(() => {
+			if (lightboxReturnFocusRef.current?.isConnected) lightboxReturnFocusRef.current.focus();
+			else focusMedicationPageTarget("create");
+		});
+	}, []);
 	const [activeTab, setActiveTab] = useState<"general" | "stock" | "prescription" | "schedule">("general");
 
 	// Tab keyboard navigation handler
@@ -347,11 +372,38 @@ export function MedicationsPage() {
 
 	// Mobile modal state (declared early because it's used in useEffect below)
 	const [showEditModal, setShowEditModal] = useState(pendingEditTransition && window.innerWidth <= 768);
+	const editorReturnFocusRef = useRef<HTMLElement | null>(null);
+	const editorWasOpenRef = useRef(viewMode === "form" || showEditModal);
+	const pendingPageFocusRef = useRef<MedicationPageFocusTarget | null>(null);
+	const deleteTriggerRef = useRef<HTMLElement | null>(null);
+	const obsoleteTriggerRef = useRef<HTMLElement | null>(null);
+	const deleteConfirmFocusTargetRef = useRef<MedicationPageFocusTarget | null>(null);
+	const obsoleteWasConfirmedRef = useRef(false);
 	const showEditModalRef = useRef(false);
 	const mobileEditHistoryUrlRef = useRef<string | null>(null);
 	useEffect(() => {
 		showEditModalRef.current = showEditModal;
 	}, [showEditModal]);
+	useEffect(() => {
+		const editorOpen = viewMode === "form" || showEditModal;
+		if (editorWasOpenRef.current && !editorOpen) {
+			const pendingTarget = pendingPageFocusRef.current;
+			pendingPageFocusRef.current = null;
+			if (pendingTarget) {
+				focusMedicationPageTarget(pendingTarget);
+			} else {
+				const returnTarget = editorReturnFocusRef.current;
+				window.requestAnimationFrame(() => {
+					if (returnTarget?.isConnected) {
+						returnTarget.focus();
+						return;
+					}
+					focusMedicationPageTarget("create");
+				});
+			}
+		}
+		editorWasOpenRef.current = editorOpen;
+	}, [showEditModal, viewMode]);
 	useEffect(() => {
 		if (showEditModal) mobileEditHistoryUrlRef.current = window.location.href;
 	}, [location.key, location.pathname, location.search, showEditModal]);
@@ -414,6 +466,8 @@ export function MedicationsPage() {
 	// Confirmation modal for unsaved changes
 	const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 	const [unsavedConfirmSource, setUnsavedConfirmSource] = useState<"mobile-edit" | "desktop-form" | null>(null);
+	const unsavedConfirmTriggerRef = useRef<HTMLElement | null>(null);
+	const unsavedConfirmWasCancelledRef = useRef(false);
 	const formChangedRef = useRef(formChanged);
 	formChangedRef.current = formChanged;
 	const showUnsavedConfirmRef = useRef(showUnsavedConfirm);
@@ -434,8 +488,7 @@ export function MedicationsPage() {
 		if (!editorUrl) return false;
 
 		window.history.pushState({ modal: "edit" }, "", editorUrl);
-		setUnsavedConfirmSource("mobile-edit");
-		setShowUnsavedConfirm(true);
+		requestUnsavedConfirmation("mobile-edit");
 		return true;
 	};
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -444,6 +497,58 @@ export function MedicationsPage() {
 	const [obsoleteCandidate, setObsoleteCandidate] = useState<Medication | null>(null);
 	const [showNoScheduleConfirm, setShowNoScheduleConfirm] = useState(false);
 	const noScheduleTriggerRef = useRef<HTMLElement | null>(null);
+
+	function requestUnsavedConfirmation(source: "mobile-edit" | "desktop-form") {
+		unsavedConfirmTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		unsavedConfirmWasCancelledRef.current = false;
+		setUnsavedConfirmSource(source);
+		setShowUnsavedConfirm(true);
+	}
+
+	function restoreUnsavedConfirmationFocus() {
+		if (!unsavedConfirmWasCancelledRef.current) return;
+		unsavedConfirmWasCancelledRef.current = false;
+		const trigger = unsavedConfirmTriggerRef.current;
+		if (trigger?.isConnected && trigger.getClientRects().length > 0) {
+			trigger.focus();
+			return;
+		}
+		focusMedicationPageTarget("create");
+	}
+
+	function restoreNoScheduleConfirmationFocus() {
+		const trigger = noScheduleTriggerRef.current;
+		if (trigger?.isConnected && trigger.getClientRects().length > 0) {
+			trigger.focus();
+			return;
+		}
+		restoreNoScheduleFocus();
+	}
+
+	function restoreDeleteConfirmationFocus() {
+		const focusTarget = deleteConfirmFocusTargetRef.current;
+		deleteConfirmFocusTargetRef.current = null;
+		pendingPageFocusRef.current = null;
+		if (focusTarget) {
+			focusMedicationPageTarget(focusTarget);
+			return;
+		}
+		const trigger = deleteTriggerRef.current;
+		if (trigger?.isConnected && trigger.getClientRects().length > 0) trigger.focus();
+		else focusMedicationPageTarget("create");
+	}
+
+	function restoreObsoleteConfirmationFocus() {
+		if (obsoleteWasConfirmedRef.current) {
+			obsoleteWasConfirmedRef.current = false;
+			pendingPageFocusRef.current = null;
+			focusMedicationPageTarget("obsolete-toggle");
+			return;
+		}
+		const trigger = obsoleteTriggerRef.current;
+		if (trigger?.isConnected && trigger.getClientRects().length > 0) trigger.focus();
+		else focusMedicationPageTarget("create");
+	}
 	const [allMeds, setAllMeds] = useState<Medication[]>(meds);
 	const [imageUploadError, setImageUploadError] = useState<string | null>(null);
 	const {
@@ -585,6 +690,16 @@ export function MedicationsPage() {
 	const [showObsolete, setShowObsolete] = useState(true);
 	const [readOnlyView, setReadOnlyView] = useState(false);
 	const [showReportModal, setShowReportModal] = useState(false);
+	const closeReportModal = useCallback(() => {
+		setShowReportModal(false);
+	}, []);
+	const restoreReportFocus = useCallback(() => {
+		const trigger = reportReturnFocusRef.current;
+		if (!trigger) return;
+		reportReturnFocusRef.current = null;
+		if (trigger?.isConnected && trigger.getClientRects().length > 0) trigger.focus();
+		else focusMedicationPageTarget("create");
+	}, []);
 	useModalHistory(!!lightboxImage, "medication-image-lightbox", closeLightbox);
 	const { closeModal: closeUnsavedConfirm } = useModalHistory(
 		showUnsavedConfirm,
@@ -972,8 +1087,7 @@ export function MedicationsPage() {
 		if (showEditModal) {
 			// Check for unsaved changes before closing
 			if (formChanged) {
-				setUnsavedConfirmSource("mobile-edit");
-				setShowUnsavedConfirm(true);
+				requestUnsavedConfirmation("mobile-edit");
 				return;
 			}
 			clearMedicationLinkParams();
@@ -986,6 +1100,7 @@ export function MedicationsPage() {
 	// Handle confirmed close (user clicked "Leave" in confirmation modal)
 	function handleConfirmClose() {
 		const source = unsavedConfirmSource;
+		unsavedConfirmWasCancelledRef.current = false;
 		const pendingAction = pendingActionRef.current;
 		setShowUnsavedConfirm(false);
 		setUnsavedConfirmSource(null);
@@ -1002,6 +1117,7 @@ export function MedicationsPage() {
 		} else if (source === "mobile-edit" && showEditModal) {
 			clearMedicationLinkParams();
 			setShowEditModal(false);
+			setViewMode("grid");
 			resetForm();
 			resetMedicationEnrichment();
 			setReadOnlyView(false);
@@ -1015,6 +1131,7 @@ export function MedicationsPage() {
 
 	// Handle cancelled close (user clicked "Stay" in confirmation modal)
 	function handleCancelClose() {
+		unsavedConfirmWasCancelledRef.current = true;
 		setShowUnsavedConfirm(false);
 		pendingActionRef.current = null;
 		if (unsavedConfirmSource === "mobile-edit") {
@@ -1069,16 +1186,10 @@ export function MedicationsPage() {
 	function handleConfirmNoSchedule() {
 		clearRegularSchedule();
 		setShowNoScheduleConfirm(false);
-		restoreNoScheduleFocus();
 	}
 
 	function cancelNoScheduleConfirmation() {
 		setShowNoScheduleConfirm(false);
-		requestAnimationFrame(() => {
-			if (noScheduleTriggerRef.current?.isConnected) {
-				noScheduleTriggerRef.current.focus();
-			}
-		});
 	}
 
 	function handleCancelNoSchedule() {
@@ -1108,14 +1219,25 @@ export function MedicationsPage() {
 			return;
 		}
 		if (formChanged) {
-			setUnsavedConfirmSource("desktop-form");
-			setShowUnsavedConfirm(true);
+			requestUnsavedConfirmation("desktop-form");
 			return;
 		}
 		handleResetForm();
 	}
 
-	function requestDeleteMed(med: Medication) {
+	function getDeleteFocusTarget(medication: Medication): MedicationPageFocusTarget {
+		const sameGroup = allMeds.filter((candidate) => candidate.isObsolete === medication.isObsolete);
+		const index = sameGroup.findIndex((candidate) => candidate.id === medication.id);
+		const adjacent = sameGroup[index + 1] ?? sameGroup[index - 1];
+		if (adjacent && (!adjacent.isObsolete || showObsolete)) return { medicationId: adjacent.id };
+
+		const otherGroup = allMeds.find((candidate) => candidate.isObsolete !== medication.isObsolete);
+		if (otherGroup && (!otherGroup.isObsolete || showObsolete)) return { medicationId: otherGroup.id };
+		return "create";
+	}
+
+	function requestDeleteMed(med: Medication, trigger: HTMLElement) {
+		deleteTriggerRef.current = trigger;
 		setDeleteCandidate(med);
 		setShowDeleteConfirm(true);
 		window.history.pushState({ modal: "delete-confirm" }, "");
@@ -1123,6 +1245,9 @@ export function MedicationsPage() {
 
 	async function handleConfirmDelete() {
 		if (!deleteCandidate) return;
+		const focusTarget = getDeleteFocusTarget(deleteCandidate);
+		deleteConfirmFocusTargetRef.current = focusTarget;
+		pendingPageFocusRef.current = focusTarget;
 		await deleteMed(deleteCandidate.id, editingId, resetForm);
 		await loadAllMeds();
 		setShowDeleteConfirm(false);
@@ -1138,7 +1263,8 @@ export function MedicationsPage() {
 		window.history.back();
 	}
 
-	function requestMarkObsolete(med: Medication) {
+	function requestMarkObsolete(med: Medication, trigger: HTMLElement) {
+		obsoleteTriggerRef.current = trigger;
 		setObsoleteCandidate(med);
 		setShowObsoleteConfirm(true);
 		window.history.pushState({ modal: "obsolete-confirm" }, "");
@@ -1146,6 +1272,8 @@ export function MedicationsPage() {
 
 	async function handleConfirmMarkObsolete() {
 		if (!obsoleteCandidate) return;
+		obsoleteWasConfirmedRef.current = true;
+		pendingPageFocusRef.current = "obsolete-toggle";
 		await markMedicationObsolete(obsoleteCandidate.id);
 		setShowObsoleteConfirm(false);
 		setObsoleteCandidate(null);
@@ -1176,6 +1304,7 @@ export function MedicationsPage() {
 			await authFetch(`/api/medications/${id}/reactivate`, { method: "POST" });
 			loadMeds();
 			await loadAllMeds();
+			focusMedicationPageTarget({ medicationId: id });
 		} catch {
 			// ignore
 		}
@@ -1268,6 +1397,7 @@ export function MedicationsPage() {
 
 			// Reset form after successful save
 			if (!editingId) {
+				showFeedback({ message: t("common.saved"), tone: "success" });
 				const shouldCloseMobileModal = showEditModal && window.innerWidth <= 768;
 				if (shouldCloseMobileModal) {
 					// Treat post-save close as confirmed so popstate does not trigger unsaved guards.
@@ -1339,6 +1469,7 @@ export function MedicationsPage() {
 				}
 				if (showEditModal) {
 					setShowEditModal(false);
+					setViewMode("grid");
 					resetForm();
 					resetMedicationEnrichment();
 				}
@@ -1353,8 +1484,7 @@ export function MedicationsPage() {
 					// Re-push history state to stay in modal
 					window.history.pushState({ modal: "edit" }, "");
 					// Show confirmation modal
-					setUnsavedConfirmSource("mobile-edit");
-					setShowUnsavedConfirm(true);
+					requestUnsavedConfirmation("mobile-edit");
 					return;
 				}
 				if (currentMedicationLinkId && currentLinkMode) {
@@ -1363,6 +1493,7 @@ export function MedicationsPage() {
 				}
 				clearMedicationLinkParams();
 				setShowEditModal(false);
+				setViewMode("grid");
 				resetForm();
 				resetMedicationEnrichment();
 				return;
@@ -1372,8 +1503,7 @@ export function MedicationsPage() {
 			if (viewMode === "form" && hasDesktopFormHistoryState.current) {
 				if (formChanged) {
 					window.history.pushState({ desktopForm: true }, "");
-					setUnsavedConfirmSource("desktop-form");
-					setShowUnsavedConfirm(true);
+					requestUnsavedConfirmation("desktop-form");
 					return;
 				}
 				hasDesktopFormHistoryState.current = false;
@@ -1391,8 +1521,7 @@ export function MedicationsPage() {
 				// Re-push history state to stay on page
 				window.history.pushState({ unsavedChanges: true }, "");
 				// Show confirmation modal
-				setUnsavedConfirmSource("desktop-form");
-				setShowUnsavedConfirm(true);
+				requestUnsavedConfirmation("desktop-form");
 			}
 		};
 		window.addEventListener("popstate", handlePopState, true);
@@ -1420,10 +1549,12 @@ export function MedicationsPage() {
 		[meds]
 	);
 
-	function handleEditClick(med: Medication) {
+	function handleEditClick(med: Medication, trigger: HTMLElement) {
+		const returnTarget = trigger.closest<HTMLElement>("[data-medication-id]") ?? trigger;
 		const latestMedication = getLatestMedication(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
+				editorReturnFocusRef.current = returnTarget;
 				setShowNameValidation(false);
 				setReadOnlyView(false);
 				resetMedicationEnrichment(latestMedication.name || latestMedication.genericName || "");
@@ -1431,10 +1562,10 @@ export function MedicationsPage() {
 				setViewMode("form");
 				scrollToTopForDesktopEdit();
 			};
-			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
-			setShowUnsavedConfirm(true);
+			requestUnsavedConfirmation(showEditModal ? "mobile-edit" : "desktop-form");
 			return;
 		}
+		editorReturnFocusRef.current = returnTarget;
 		setShowNameValidation(false);
 		setReadOnlyView(false);
 		setActiveTab("general");
@@ -1444,10 +1575,12 @@ export function MedicationsPage() {
 		scrollToTopForDesktopEdit();
 	}
 
-	function handleViewClick(med: Medication) {
+	function handleViewClick(med: Medication, trigger: HTMLElement) {
+		const returnTarget = trigger.closest<HTMLElement>("[data-medication-id]") ?? trigger;
 		const latestMedication = getLatestMedication(med);
 		if (formChanged) {
 			pendingActionRef.current = () => {
+				editorReturnFocusRef.current = returnTarget;
 				setShowNameValidation(false);
 				setReadOnlyView(true);
 				resetMedicationEnrichment(latestMedication.name || latestMedication.genericName || "");
@@ -1455,10 +1588,10 @@ export function MedicationsPage() {
 				setViewMode("form");
 				scrollToTopForDesktopEdit();
 			};
-			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
-			setShowUnsavedConfirm(true);
+			requestUnsavedConfirmation(showEditModal ? "mobile-edit" : "desktop-form");
 			return;
 		}
+		editorReturnFocusRef.current = returnTarget;
 		setShowNameValidation(false);
 		setReadOnlyView(true);
 		setActiveTab("general");
@@ -1468,9 +1601,10 @@ export function MedicationsPage() {
 		scrollToTopForDesktopEdit();
 	}
 
-	function handleNewEntryClick() {
+	function handleNewEntryClick(trigger: HTMLElement) {
 		if (formChanged) {
 			pendingActionRef.current = () => {
+				editorReturnFocusRef.current = trigger;
 				resetForm();
 				resetMedicationEnrichment();
 				setShowNameValidation(false);
@@ -1481,10 +1615,10 @@ export function MedicationsPage() {
 					setViewMode("form");
 				}
 			};
-			setUnsavedConfirmSource(showEditModal ? "mobile-edit" : "desktop-form");
-			setShowUnsavedConfirm(true);
+			requestUnsavedConfirmation(showEditModal ? "mobile-edit" : "desktop-form");
 			return;
 		}
+		editorReturnFocusRef.current = trigger;
 		resetForm();
 		resetMedicationEnrichment();
 		setShowNameValidation(false);
@@ -1568,7 +1702,10 @@ export function MedicationsPage() {
 				coverageByMed={coverageByMed}
 				canRecordNow={canRecordNow}
 				onNewEntry={handleNewEntryClick}
-				onOpenReport={() => setShowReportModal(true)}
+				onOpenReport={(trigger) => {
+					reportReturnFocusRef.current = trigger;
+					setShowReportModal(true);
+				}}
 				onEdit={handleEditClick}
 				onRecordNow={setRecordNowMedication}
 				onView={handleViewClick}
@@ -1576,7 +1713,10 @@ export function MedicationsPage() {
 				onDelete={requestDeleteMed}
 				onReactivate={reactivateMedication}
 				onToggleObsolete={toggleObsoleteSection}
-				onImagePreview={(med) => setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) })}
+				onImagePreview={(med, trigger) => {
+					lightboxReturnFocusRef.current = trigger;
+					setLightboxImage({ src: `/api/images/${med.imageUrl}`, alt: getMedDisplayName(med) });
+				}}
 				getMedicationPackageTypeLabel={getMedicationPackageTypeLabel}
 				getMedicationStockSuffix={getMedicationStockSuffix}
 				getMedicationUsageUnitLabel={getMedicationUsageUnitLabel}
@@ -1587,17 +1727,18 @@ export function MedicationsPage() {
 				viewMode={viewMode}
 				editingId={editingId}
 				readOnlyView={readOnlyView}
-				selectedMedicationName={selectedMedication?.name}
+				selectedMedicationName={selectedMedication ? getMedDisplayName(selectedMedication) : undefined}
 				onBack={handleDesktopFormLeave}
 				onSubmit={saveMedication}
 				toolbar={
-					<div className={formClasses.tabs} role="tablist" aria-label={t("form.sections.general")}>
+					<div className={formClasses.tabs} role="tablist" aria-label={t("form.sections.ariaLabel")}>
 						<button
 							type="button"
 							role="tab"
 							id="med-editor-tab-general"
 							aria-selected={activeTab === "general"}
 							aria-controls="med-editor-panel-general"
+							tabIndex={activeTab === "general" ? 0 : -1}
 							className={[formClasses.tab, activeTab === "general" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
@@ -1612,6 +1753,7 @@ export function MedicationsPage() {
 							id="med-editor-tab-stock"
 							aria-selected={activeTab === "stock"}
 							aria-controls="med-editor-panel-stock"
+							tabIndex={activeTab === "stock" ? 0 : -1}
 							className={[formClasses.tab, activeTab === "stock" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
@@ -1626,6 +1768,7 @@ export function MedicationsPage() {
 							id="med-editor-tab-schedule"
 							aria-selected={activeTab === "schedule"}
 							aria-controls="med-editor-panel-schedule"
+							tabIndex={activeTab === "schedule" ? 0 : -1}
 							className={[formClasses.tab, activeTab === "schedule" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
@@ -1640,6 +1783,7 @@ export function MedicationsPage() {
 							id="med-editor-tab-prescription"
 							aria-selected={activeTab === "prescription"}
 							aria-controls="med-editor-panel-prescription"
+							tabIndex={activeTab === "prescription" ? 0 : -1}
 							className={[formClasses.tab, activeTab === "prescription" ? formClasses.tabActive : ""]
 								.filter(Boolean)
 								.join(" ")}
@@ -2494,6 +2638,7 @@ export function MedicationsPage() {
 				}
 				onConfirmClose={handleConfirmClose}
 				onCancelClose={cancelUnsavedConfirm}
+				onUnsavedConfirmExit={restoreUnsavedConfirmationFocus}
 				showNoScheduleConfirm={showNoScheduleConfirm}
 				noScheduleTitle={t("form.blisters.removeLastTitle")}
 				noScheduleMessage={t("form.blisters.removeLastMessage")}
@@ -2501,6 +2646,7 @@ export function MedicationsPage() {
 				noScheduleCancelLabel={t("common.cancel")}
 				onConfirmNoSchedule={handleConfirmNoSchedule}
 				onCancelNoSchedule={handleCancelNoSchedule}
+				onNoScheduleConfirmExit={restoreNoScheduleConfirmationFocus}
 				showObsoleteConfirm={showObsoleteConfirm}
 				obsoleteCandidate={obsoleteCandidate}
 				obsoleteTitle={t("medications.obsoleteModal.title")}
@@ -2509,6 +2655,7 @@ export function MedicationsPage() {
 				obsoleteCancelLabel={t("common.cancel")}
 				onConfirmMarkObsolete={handleConfirmMarkObsolete}
 				onCancelMarkObsolete={handleCancelMarkObsolete}
+				onObsoleteConfirmExit={restoreObsoleteConfirmationFocus}
 				showDeleteConfirm={showDeleteConfirm}
 				deleteCandidate={deleteCandidate}
 				deleteTitle={t("medications.deleteModal.title")}
@@ -2517,11 +2664,13 @@ export function MedicationsPage() {
 				deleteCancelLabel={t("common.cancel")}
 				onConfirmDelete={handleConfirmDelete}
 				onCancelDelete={handleCancelDelete}
+				onDeleteConfirmExit={restoreDeleteConfirmationFocus}
 				showEditModal={showEditModal}
 				lightboxImage={lightboxImage}
 				onCloseLightbox={closeLightbox}
 				showReportModal={showReportModal}
-				onCloseReportModal={() => setShowReportModal(false)}
+				onCloseReportModal={closeReportModal}
+				onReportModalExit={restoreReportFocus}
 				medications={allMeds}
 			/>
 		</section>

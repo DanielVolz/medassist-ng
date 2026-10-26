@@ -1,5 +1,6 @@
 import { ArrowLeft } from "lucide-react";
 import type React from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { SectionCard } from "../../ui/components/SectionCard";
 import { AppButton } from "../../ui/primitives/AppButton";
@@ -29,6 +30,8 @@ export function MedicationEditCoordinator({
 	actions,
 }: MedicationEditCoordinatorProps) {
 	const { t } = useTranslation();
+	const headingRef = useRef<HTMLHeadingElement>(null);
+	const focusTargetKey = JSON.stringify([editingId, readOnlyView, selectedMedicationName]);
 	const title = editingId ? (
 		<>
 			{readOnlyView ? t("form.viewEntry") : t("form.editEntry")}: {selectedMedicationName}
@@ -37,9 +40,16 @@ export function MedicationEditCoordinator({
 		t("form.newEntry")
 	);
 
+	useEffect(() => {
+		if (viewMode !== "form" || window.innerWidth <= 768) return;
+		if (headingRef.current?.dataset.focusTarget !== focusTargetKey) return;
+		headingRef.current?.focus();
+	}, [viewMode, focusTargetKey]);
+
 	return (
 		<aside
 			className={[classes.sidebar, viewMode === "form" ? classes.sidebarOpen : ""].filter(Boolean).join(" ")}
+			aria-labelledby="medication-editor-heading"
 			data-open={viewMode === "form" ? "true" : "false"}
 		>
 			<SectionCard padding="md" className={classes.editorShell} contentClassName={classes.cardContent}>
@@ -53,7 +63,9 @@ export function MedicationEditCoordinator({
 					>
 						{t("common.back")}
 					</AppButton>
-					<h2>{title}</h2>
+					<h2 id="medication-editor-heading" ref={headingRef} tabIndex={-1} data-focus-target={focusTargetKey}>
+						{title}
+					</h2>
 				</div>
 				{toolbar ? <div className={classes.toolbar}>{toolbar}</div> : null}
 				<form

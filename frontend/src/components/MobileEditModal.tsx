@@ -496,7 +496,7 @@ export function MobileEditModal({
 					onSaveMedication(e);
 				}}
 			>
-				<div className={classes.tabList} role="tablist" aria-label={t("form.sections.general")} ref={tabStripRef}>
+				<div className={classes.tabList} role="tablist" aria-label={t("form.sections.ariaLabel")} ref={tabStripRef}>
 					{MOBILE_TAB_ORDER.map((tab) => (
 						<button
 							key={tab}
@@ -505,6 +505,7 @@ export function MobileEditModal({
 							id={`mobile-editor-tab-${tab}`}
 							aria-selected={activeTab === tab}
 							aria-controls={`mobile-editor-panel-${tab}`}
+							tabIndex={activeTab === tab ? 0 : -1}
 							className={[classes.tab, activeTab === tab ? classes.tabActive : ""].filter(Boolean).join(" ")}
 							onClick={() => setActiveTab(tab)}
 							onKeyDown={(e) => handleTabKeyDown(e, tab)}
@@ -545,7 +546,8 @@ export function MobileEditModal({
 								role="tabpanel"
 								id="mobile-editor-panel-general"
 								aria-labelledby="mobile-editor-tab-general"
-								hidden={activeTab !== "general"}
+								aria-hidden={activeTab !== "general"}
+								inert={activeTab !== "general"}
 								className={[classes.tabPanel, activeTab === "general" ? classes.tabPanelActive : ""].join(" ")}
 							>
 								<div className={["full", formClasses.category, classes.category].join(" ")}>
@@ -791,7 +793,8 @@ export function MobileEditModal({
 								role="tabpanel"
 								id="mobile-editor-panel-stock"
 								aria-labelledby="mobile-editor-tab-stock"
-								hidden={activeTab !== "stock"}
+								aria-hidden={activeTab !== "stock"}
+								inert={activeTab !== "stock"}
 								className={[classes.tabPanel, activeTab === "stock" ? classes.tabPanelActive : ""].join(" ")}
 							>
 								<div className={["full", formClasses.category, classes.category].join(" ")}>
@@ -1031,7 +1034,8 @@ export function MobileEditModal({
 								role="tabpanel"
 								id="mobile-editor-panel-schedule"
 								aria-labelledby="mobile-editor-tab-schedule"
-								hidden={activeTab !== "schedule"}
+								aria-hidden={activeTab !== "schedule"}
+								inert={activeTab !== "schedule"}
 								className={[classes.tabPanel, activeTab === "schedule" ? classes.tabPanelActive : ""].join(" ")}
 							>
 								<div className={["full", formClasses.category, formClasses.intakeSection, classes.category].join(" ")}>
@@ -1215,7 +1219,8 @@ export function MobileEditModal({
 								role="tabpanel"
 								id="mobile-editor-panel-prescription"
 								aria-labelledby="mobile-editor-tab-prescription"
-								hidden={activeTab !== "prescription"}
+								aria-hidden={activeTab !== "prescription"}
+								inert={activeTab !== "prescription"}
 								className={[classes.tabPanel, activeTab === "prescription" ? classes.tabPanelActive : ""].join(" ")}
 							>
 								<div className={["full", formClasses.category, classes.category].join(" ")}>

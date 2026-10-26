@@ -27,6 +27,7 @@ type ReportFormat = "txt" | "md" | "pdf";
 interface ReportModalProps {
 	isOpen: boolean;
 	onClose: () => void;
+	onExitTransitionEnd: () => void;
 	medications: Medication[];
 }
 
@@ -101,7 +102,7 @@ function getDefaultDateRange(): ReportDateRange {
 	};
 }
 
-function ReportModal({ isOpen, onClose, medications }: ReportModalProps) {
+function ReportModal({ isOpen, onClose, onExitTransitionEnd, medications }: ReportModalProps) {
 	const { t } = useTranslation();
 	const { authFetch } = useAuth();
 	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -252,8 +253,6 @@ function ReportModal({ isOpen, onClose, medications }: ReportModalProps) {
 		}
 	}
 
-	if (!isOpen) return null;
-
 	return (
 		<AppModal
 			classNames={{
@@ -263,6 +262,7 @@ function ReportModal({ isOpen, onClose, medications }: ReportModalProps) {
 			}}
 			contentClassName={classes.modal}
 			onClose={onClose}
+			onExitTransitionEnd={onExitTransitionEnd}
 			opened={isOpen}
 			closeButtonProps={{ "aria-label": t("common.close") }}
 			size={520}

@@ -223,7 +223,7 @@ findings in light and dark themes. Pixel comparisons and screenshot baselines
 are not CI gates. Failure screenshots and videos are diagnostic artifacts only.
 Unrelated frontend changes do not require this editor-specific gate.
 
-The runner uses the pinned Playwright `1.64.0` Linux AMD64 container used by CI.
+The runner uses the pinned Playwright `1.64.1` Linux AMD64 container used by CI.
 Keep this image version aligned with the exact `@playwright/test` version in
 `frontend/package.json`; Playwright requires a matching browser image.
 Each run uses a new result directory under ignored `frontend/test-results/`.

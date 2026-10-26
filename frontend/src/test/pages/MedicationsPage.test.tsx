@@ -503,7 +503,7 @@ describe("MedicationsPage with items", () => {
 		mockContextValue = createMockContext({ meds: [medicationWithImage] });
 
 		renderPage();
-		fireEvent.click(screen.getByRole("button", { name: "Aspirin" }));
+		fireEvent.click(screen.getByRole("button", { name: "medications.list.actionPreviewImage" }));
 
 		expect(screen.getByTestId("lightbox-open")).toHaveTextContent("/api/images/aspirin.webp|Aspirin");
 	});
@@ -513,7 +513,7 @@ describe("MedicationsPage with items", () => {
 		mockFormHookValue = createMockFormHook({ startEdit });
 		fetchMock.mockResolvedValue({ ok: true, json: async () => mockMeds });
 		renderPage();
-		fireEvent.click(screen.getAllByRole("button", { name: "common.edit" })[0]);
+		fireEvent.click(screen.getAllByRole("button", { name: "medications.list.actionEdit" })[0]);
 		expect(startEdit).toHaveBeenCalledTimes(1);
 	});
 
@@ -531,7 +531,7 @@ describe("MedicationsPage with items", () => {
 
 		renderPage();
 
-		fireEvent.click(screen.getAllByRole("button", { name: "common.edit" })[0]);
+		fireEvent.click(screen.getAllByRole("button", { name: "medications.list.actionEdit" })[0]);
 
 		expect(startEdit).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 1, takenBy: ["Alice", "Bob"] }),
@@ -582,7 +582,7 @@ describe("MedicationsPage with items", () => {
 		});
 
 		renderPage();
-		fireEvent.click(screen.getAllByRole("button", { name: "common.edit" })[0]);
+		fireEvent.click(screen.getAllByRole("button", { name: "medications.list.actionEdit" })[0]);
 
 		expect(screen.getByTestId("confirm-modal")).toBeInTheDocument();
 		fireEvent.click(screen.getByText("common.unsavedChanges.leave"));
@@ -657,7 +657,11 @@ describe("MedicationsPage with items", () => {
 		fireEvent.click(obsoleteToggleButton);
 
 		await waitFor(() => {
-			expect(screen.queryByText("medications.list.reactivate")).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", {
+					name: "medications.list.actionReactivate",
+				})
+			).not.toBeInTheDocument();
 		});
 
 		fireEvent.click(
@@ -666,7 +670,11 @@ describe("MedicationsPage with items", () => {
 				expanded: false,
 			})
 		);
-		expect(screen.getByText("medications.list.reactivate")).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", {
+				name: "medications.list.actionReactivate",
+			})
+		).toBeInTheDocument();
 	});
 });
 

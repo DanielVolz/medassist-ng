@@ -351,22 +351,42 @@ Review each finding against imports, scripts, CSS, dynamic consumers, tests, and
 
 ## Release Workflow Safeguards
 
+Agent-assisted repair-and-merge work follows the ownership and completion rules
+in `AGENTS.md` and the procedure in
+`.github/skills/medassist-release-ci-monitoring/SKILL.md`. Check PR dependencies
+before broad validation, reproduce and repair the smallest failing check locally,
+then require full upstream gates on the final head. Specialist handoffs and
+pending CI are intermediate states, not a completed merge.
+
+Validate agent governance changes from the repository root:
+
+```bash
+npm run test:agent-harness
+npm run validate:agent-harness
+```
+
+These checks validate instruction contracts, not actual future agent compliance.
+If a terminal returns unrelated output, follow the bounded fallback in
+`AGENTS.md`; do not treat stale output as a passed check.
+
 - README-only PRs emit the required backend, frontend, and Playwright statuses as successful no-op checks; package tests and browser suites run only for relevant source or workflow changes.
 - PR validation is enforced through `.github/workflows/test.yml`, `.github/workflows/e2e.yml`, and `.github/workflows/container-smoke.yml`.
 - Workflow syntax validation is enforced through `.github/workflows/workflow-validation.yml` with `actionlint` on PRs that change workflow files under `.github/workflows/**`.
 - CodeQL scans both `javascript-typescript` source code and GitHub Actions workflow changes under `.github/workflows/**` / `.github/actions/**`.
 - Within product-relevant PRs, required product checks still emit their stable names and report a no-op success when a backend/frontend lane is not relevant inside that product scope.
-- Workflow-only edits are validated by `Workflow Validation / Actionlint`; they do not trigger backend/frontend/Playwright/container smoke lanes by themselves, but they still run CodeQL for the `actions` language.
-- Release-relevant PRs also run `.github/workflows/container-smoke.yml` as a dedicated visible `Container Smoke` PR check after `Backend Tests`, `Frontend Build`, and `Playwright E2E` are green.
+- Workflow-only edits run `Workflow Validation / Actionlint` and CodeQL `actions`; Test job filters determine the additional lanes, including smoke for changes to its caller, callee, or Docker publisher.
+- Release-relevant PRs call `.github/workflows/container-smoke.yml` through Test DAG dependencies after backend, frontend, and reusable E2E success. No runner polls checks. The stable `Container Smoke` result fails for blocked relevant smoke and explicitly reports a no-op for irrelevant changes.
 - Dependabot auto-merge for safe updates is gated by `.github/workflows/dependabot-automerge.yml` and currently allows `npm`, `npm_and_yarn`, and `github_actions` ecosystems for semver minor/patch updates only.
 - The default-branch ruleset requires the stable CodeQL context `Analyze (javascript-typescript)`, so workflow changes must keep the CodeQL job name aligned with that exact required-check context.
 - Docker publishing is handled by `.github/workflows/docker-build.yml`.
 - The reusable container smoke workflow is used in two places:
-  - directly on release-relevant PRs as the visible `Container Smoke` check
-  - from `docker-build.yml` before release completion
+  - from Test for local AMD64 builds on smoke-relevant PRs
+  - from `docker-build.yml` for the exact digest-only GHCR candidates, before consumer tags move
+- Docker builds each AMD64/ARM64 candidate once with SBOM/provenance, uploads it without consumer tags, and smokes its digest on AMD64 only. ARM64 runtime behavior is not smoke-tested.
+- After smoke, single-source `imagetools create --prefer-index=false` copies the tested indexes without rebuilding; every promoted tag is verified against its source digest. Main moves `main`; stable semver tags move version aliases and `latest`; prereleases never move `latest`. Manual runs retain explicit tag/release controls and reject prerelease-to-`latest` promotion.
 - Docker Buildx cache export is allowed to fail in smoke/publish builds (`ignore-error=true`) because cache reservation is an optimization; container build, startup, health, static asset, and proxy checks remain the required signal.
 - Releases also run `npm run release:preflight` in two stages:
-  - early static validation of tag, package versions, release policy, compose tags, and release workflow dependencies
+  - static validation of tag, package versions, release policy, compose tags, and DAG/digest contracts before candidate builds or uploads
   - late validation of generated changelog and `docker-compose.pinned.yml` before GitHub Release creation
 - The release version policy is documented in `docs/release-policy.md` and enforced by `release-policy.json`:
   - `backend`, `frontend` and `shared` must all match the release tag

@@ -25,6 +25,10 @@ on:
     - cron: "0 6 * * 1" # Weekly on Monday at 6am UTC
   workflow_dispatch: # Allow manual trigger
 
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || format('{0}-{1}', github.run_id, github.run_attempt) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})

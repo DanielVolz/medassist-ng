@@ -69,6 +69,7 @@ async function buildProbeApp(options?: CreateAppOptions): Promise<FastifyInstanc
 		imagesDir: options?.imagesDir ?? createImagesDir(),
 	});
 	app.get("/bootstrap-test/probe", async () => ({ ok: true }));
+	app.post("/bootstrap-test/probe", async () => ({ ok: true }));
 	await app.ready();
 	return app;
 }
@@ -156,6 +157,43 @@ describe("createApp bootstrap defaults", () => {
 
 		try {
 			await expectCorsWithholdsAllowOriginForUnconfiguredBrowserOrigin(app);
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("omits HTTPS-upgrade headers outside production while keeping other Helmet defaults", async () => {
+		const app = await buildProbeApp({ isProduction: false });
+
+		try {
+			const response = await app.inject({ method: "POST", url: "/bootstrap-test/probe" });
+			const contentSecurityPolicy = response.headers["content-security-policy"];
+
+			expect(response.statusCode).toBe(200);
+			expect(contentSecurityPolicy).toBeTypeOf("string");
+			expect(contentSecurityPolicy).not.toContain("upgrade-insecure-requests");
+			expect(response.headers["strict-transport-security"]).toBeUndefined();
+			expect(response.headers["x-content-type-options"]).toBe("nosniff");
+			expect(response.headers["x-frame-options"]).toBe("SAMEORIGIN");
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("retains Helmet's production HTTPS protections and defaults", async () => {
+		const app = await buildProbeApp({ isProduction: true });
+
+		try {
+			const response = await app.inject({ method: "POST", url: "/bootstrap-test/probe" });
+			const contentSecurityPolicy = response.headers["content-security-policy"];
+			const strictTransportSecurity = response.headers["strict-transport-security"];
+
+			expect(response.statusCode).toBe(200);
+			expect(contentSecurityPolicy).toContain("upgrade-insecure-requests");
+			expect(strictTransportSecurity).toContain("max-age=31536000");
+			expect(strictTransportSecurity).toContain("includeSubDomains");
+			expect(response.headers["x-content-type-options"]).toBe("nosniff");
+			expect(response.headers["x-frame-options"]).toBe("SAMEORIGIN");
 		} finally {
 			await app.close();
 		}

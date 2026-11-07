@@ -169,6 +169,12 @@ describe("notification action routes", () => {
 		expect(response.headers["content-type"]).toContain("text/html");
 		expect(response.body).toContain("Respond to reminder");
 		expect(response.body).toContain("Take your medication now");
+		const actions = response.body.match(/<div class="actions">([\s\S]*?)<\/div>/)?.[1];
+		expect(actions).toBeDefined();
+		expect(actions?.match(/<form method="POST"/g)).toHaveLength(2);
+		expect(actions).toContain('class="action-link"');
+		expect(response.body).toContain("min-height: 44px");
+		expect(response.body).toContain(":focus-visible");
 
 		const rows = await testClient.execute({
 			sql: `SELECT g.resolved_action, t.used_at
@@ -257,6 +263,9 @@ describe("notification action routes", () => {
 		expect(response.body).toContain(
 			"This intake is already marked as skipped. If you want to mark it as taken instead, open MedAssist and do that there."
 		);
+		const actions = response.body.match(/<div class="actions">([\s\S]*?)<\/div>/)?.[1];
+		expect(actions).toContain('class="action-link"');
+		expect(actions).not.toContain("<form");
 	});
 
 	it("skips doses through a respond token and returns friendly success for already-resolved follow-up actions", async () => {

@@ -91,8 +91,19 @@ function buildLoggerOptions(level: string) {
 	return base;
 }
 
-function buildHelmetOptions(_isProduction: boolean) {
-	return {};
+function buildHelmetOptions(isProduction: boolean) {
+	if (isProduction) {
+		return {};
+	}
+
+	return {
+		contentSecurityPolicy: {
+			directives: {
+				"upgrade-insecure-requests": null,
+			},
+		},
+		strictTransportSecurity: false,
+	};
 }
 
 function isPublicNotificationActionPath(url: string | undefined): boolean {

@@ -46,6 +46,14 @@ so use a trusted network. Missing, malformed, credential-bearing, unresolvable,
 public, or non-local URLs leave the sandbox loopback-only without an action URL.
 Startup reports that fallback without printing the source URL or credentials.
 
+Non-production backends, including this HTTP sandbox, omit Helmet's CSP
+`upgrade-insecure-requests` directive and `Strict-Transport-Security` (HSTS)
+header so notification-action form POSTs are not upgraded from HTTP to HTTPS
+by these response headers. All other Helmet defaults remain enabled.
+Production (`NODE_ENV=production`) keeps Helmet's unchanged default configuration,
+including both HTTPS protections. This does not clear HSTS already cached by a
+browser or inherited from a parent domain.
+
 Sandbox schedulers remain disabled and startup does not send notifications.
 The test-email and test-push actions require a destination to be deliberately
 entered in the sandbox UI; no production recipient or push URL is populated.

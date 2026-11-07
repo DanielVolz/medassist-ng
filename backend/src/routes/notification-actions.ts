@@ -255,16 +255,18 @@ function renderPage(options: {
 	const labels = getNotificationActionLabels(options.language);
 	const forms =
 		options.actionButtons.length > 0
-			? `<div class="actions">${options.actionButtons
+			? options.actionButtons
 					.map((button) => {
 						const formAction = button.formAction ? ` action="${escapeHtml(button.formAction)}"` : "";
 						return `<form method="POST"${formAction}><button type="submit">${escapeHtml(button.label)}</button></form>`;
 					})
-					.join("")}</div>`
+					.join("")
 			: "";
 	const viewLink = options.viewUrl
-		? `<p><a href="${escapeHtml(options.viewUrl)}">${escapeHtml(labels.view)}</a></p>`
+		? `<a class="action-link" href="${escapeHtml(options.viewUrl)}">${escapeHtml(labels.view)}</a>`
 		: "";
+	const actions =
+		options.actionButtons.length > 0 || options.viewUrl ? `<div class="actions">${forms}${viewLink}</div>` : "";
 
 	return `<!DOCTYPE html>
 <html lang="${options.language}">
@@ -273,17 +275,60 @@ function renderPage(options: {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${escapeHtml(options.bodyTitle)}</title>
     <style>
-      body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f4f5f7; color: #1f2937; }
-      main { max-width: 640px; margin: 48px auto; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 12px 40px rgba(15, 23, 42, 0.08); }
-      h1 { margin-top: 0; font-size: 1.5rem; }
-      .card { padding: 16px; border-radius: 12px; background: #f9fafb; margin: 16px 0 24px; }
-      .actions { display: flex; gap: 12px; flex-wrap: wrap; }
-      form { margin: 0; }
-      button, a { display: inline-flex; align-items: center; justify-content: center; min-width: 140px; border-radius: 10px; padding: 12px 16px; font: inherit; text-decoration: none; }
-      button { border: none; background: #0f766e; color: white; cursor: pointer; }
-      form:last-of-type button { background: #475569; }
-      a { background: #e2e8f0; color: #0f172a; }
-      p { line-height: 1.5; }
+      :root {
+        color-scheme: dark;
+        --page-bg: #101314;
+        --surface: #16191b;
+        --card-bg: #1b1f22;
+        --border: #272c30;
+        --text: #f0f2f3;
+        --text-secondary: #9aa5ac;
+        --accent: #1ca583;
+        --accent-hover: #23b993;
+        --accent-text: #0a2b1f;
+        --secondary-bg: #1b1f22;
+        --secondary-hover: #272c30;
+        --focus-ring: #4fd6b2;
+        --shadow: rgba(0, 0, 0, 0.4);
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          color-scheme: light;
+          --page-bg: #f6f6f4;
+          --surface: #ffffff;
+          --card-bg: #efefec;
+          --border: #e3e3de;
+          --text: #1b1f21;
+          --text-secondary: #545e63;
+          --accent: #085c46;
+          --accent-hover: #08614a;
+          --accent-text: #ffffff;
+          --secondary-bg: #efefec;
+          --secondary-hover: #e3e3de;
+          --focus-ring: #085c46;
+          --shadow: rgba(27, 31, 33, 0.12);
+        }
+      }
+      * { box-sizing: border-box; }
+      body { display: flow-root; min-height: 100vh; margin: 0; background: var(--page-bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; }
+      main { width: min(640px, calc(100% - 24px)); margin: clamp(24px, 8vh, 64px) auto; padding: clamp(16px, 4vw, 28px); border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 12px 40px var(--shadow); }
+      h1 { margin: 0 0 10px; font-size: clamp(1.3rem, 1.1rem + 1vw, 1.5rem); line-height: 1.25; letter-spacing: -0.02em; }
+      p { margin: 0; color: var(--text-secondary); line-height: 1.55; }
+      .card { margin: 22px 0 0; padding: 16px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 12px; background: var(--card-bg); }
+      .card strong { display: block; color: var(--text); font-size: 1rem; }
+      .card p { margin-top: 8px; overflow-wrap: anywhere; }
+      .actions { display: flex; align-items: stretch; gap: 8px; margin-top: 22px; }
+      form { display: flex; flex: 1 1 0; min-width: 0; margin: 0; }
+      button, .action-link { display: inline-flex; flex: 1 1 0; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 8px 6px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-size: clamp(0.7rem, 3.2vw, 0.9rem); font-weight: 600; line-height: 1.2; text-align: center; text-decoration: none; white-space: nowrap; }
+      button { background: var(--accent); color: var(--accent-text); cursor: pointer; }
+      button:hover { background: var(--accent-hover); }
+      form:last-of-type button, .action-link { border-color: var(--border); background: var(--secondary-bg); color: var(--text); }
+      form:last-of-type button:hover, .action-link:hover { background: var(--secondary-hover); }
+      button:focus-visible, .action-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+      @media (max-width: 360px) {
+        .actions { gap: 4px; }
+        button, .action-link { padding-right: 4px; padding-left: 4px; font-size: 0.7rem; }
+      }
     </style>
   </head>
   <body>
@@ -294,8 +339,7 @@ function renderPage(options: {
         <strong>${escapeHtml(options.title)}</strong>
         <p>${toHtmlText(options.message)}</p>
       </div>
-      ${forms}
-      ${viewLink}
+      ${actions}
     </main>
   </body>
 </html>`;

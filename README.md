@@ -186,7 +186,7 @@ See [Unscheduled medications and Record now](docs/CONFIGURATION.md#unscheduled-m
 
 ### Notifications
 - Email via SMTP
-- Push notifications via ntfy, Pushover, Gotify, Telegram, Discord & more ([Shoutrrr](https://containrrr.dev/shoutrrr/))
+- Push notifications via native ntfy and the maintained [Shoutrrr fork](https://github.com/nicholas-fedor/shoutrrr) (Pushover, Gotify, Telegram, Discord & more)
 - Supports stock warnings and intake reminders
 
 ### Privacy & Security

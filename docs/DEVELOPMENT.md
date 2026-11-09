@@ -1,5 +1,14 @@
 # Development
 
+### Shoutrrr bridge
+Docker builds the static bridge with Go 1.27.3 for AMD64/ARM64; no sidecar is needed. For local backend development, run `cd backend/tools/shoutrrr && go test -race ./... && CGO_ENABLED=0 go build -trimpath -o /tmp/medassist-shoutrrr .`, then set `SHOUTRRR_BINARY_PATH=/tmp/medassist-shoutrrr` for the backend process. A missing bridge produces an actionable error; there is no fallback. Tests use fictional credentials and injected loopback echo dialing only; never test against real notification destinations. URL/title/message go through stdin, never argv or environment.
+
+The Docker development stack builds the `development` target of the backend
+Dockerfile, which includes the same bridge and system CA certificates.
+After changing the bridge, rebuild it with
+`docker compose -p medassist-dev -f docker-compose.dev.yml build backend-dev`.
+The native ntfy and email paths do not require the bridge.
+
 ## Start the Development Stack
 
 ```bash

@@ -5,7 +5,7 @@ import { userSettings } from "../db/schema.js";
 import type { Language } from "../i18n/translations.js";
 import { parseBoolEnv, parseIntEnv } from "../utils/env-parsing.js";
 import { isNtfyNotificationUrl } from "./notifications/action-renderer.js";
-import { createNotificationTargetDispatcher, validateNotificationHostname } from "./notifications/target-transport.js";
+import { validateNotificationHostname } from "./notifications/target-transport.js";
 
 export { validateNotificationHostname, validateNotificationTargetUrl } from "./notifications/target-transport.js";
 
@@ -174,46 +174,6 @@ export function normalizeSettingsTimezone(value: string | null | undefined): str
 	return getTimezoneSet().has(trimmed) ? trimmed : "";
 }
 
-export async function sendGenericNotificationRequest(
-	urlStr: string,
-	headers: Record<string, string>,
-	body: string
-): Promise<{ success: true } | { success: false; error: string }> {
-	const safeTargetUrl = reconstructGenericNotificationTarget(urlStr);
-	if (typeof safeTargetUrl !== "string") {
-		return { success: false, error: safeTargetUrl.error };
-	}
-
-	const dispatcherResult = await createNotificationTargetDispatcher(safeTargetUrl);
-	if ("error" in dispatcherResult) {
-		return { success: false, error: dispatcherResult.error };
-	}
-
-	try {
-		const target = new URL(safeTargetUrl);
-		// Dispatcher.request does not follow redirects and resolves only through the pinned lookup above.
-		const response = await dispatcherResult.dispatcher.request({
-			origin: target.origin,
-			path: `${target.pathname}${target.search}`,
-			method: "POST",
-			headers,
-			body,
-			headersTimeout: 10_000,
-			bodyTimeout: 10_000,
-		});
-
-		if (response.statusCode >= 200 && response.statusCode < 300) {
-			await response.body.dump();
-			return { success: true };
-		}
-
-		const errorText = await response.body.text();
-		return { success: false, error: `HTTP ${response.statusCode}: ${errorText}` };
-	} finally {
-		await dispatcherResult.dispatcher.close();
-	}
-}
-
 export function sanitizeNotificationUrl(
 	urlStr: string
 ): { url: string; isNtfy: boolean; auth?: { user: string; pass: string } } | { error: string } {
@@ -259,26 +219,6 @@ export function sanitizeNotificationUrl(
 		return { url: reconstructedUrl, isNtfy, auth };
 	} catch {
 		return { error: "Invalid URL format" };
-	}
-}
-
-function reconstructGenericNotificationTarget(urlStr: string): string | { error: string } {
-	try {
-		const parsed = new URL(urlStr);
-		if (["http:", "https:"].indexOf(parsed.protocol) === -1 || parsed.username || parsed.password || parsed.hash) {
-			return { error: "Invalid Generic target URL" };
-		}
-
-		const hostnameError = validateNotificationHostname(parsed.hostname);
-		if (hostnameError) return { error: hostnameError };
-
-		const target = new URL(`${parsed.protocol}//${parsed.hostname}`);
-		target.port = parsed.port;
-		target.pathname = parsed.pathname;
-		target.search = parsed.search;
-		return target.toString();
-	} catch {
-		return { error: "Invalid Generic target URL" };
 	}
 }
 
@@ -337,7 +277,9 @@ export function buildGenericNotificationRequest(
 	urlStr: string,
 	title: string,
 	message: string
-): { url: string; headers: Record<string, string>; body: string } | { error: string } {
+):
+	| { url: string; headers: Record<string, string>; body: string; method: string; template?: string }
+	| { error: string } {
 	try {
 		const parsed = new URL(urlStr);
 		if (parsed.protocol !== "generic:") {
@@ -397,7 +339,7 @@ export function buildGenericNotificationRequest(
 
 		const template = getGenericConfigValue(parsed.searchParams, "template")?.toLowerCase();
 		if (template !== "json") {
-			return { url: target.toString(), headers, body: message };
+			return { url: target.toString(), headers, body: message, method: requestMethod };
 		}
 
 		const titleKey = getGenericConfigValue(parsed.searchParams, "titlekey") ?? "title";
@@ -413,7 +355,7 @@ export function buildGenericNotificationRequest(
 			payload[key.slice(1)] = value;
 		}
 
-		return { url: target.toString(), headers, body: JSON.stringify(payload) };
+		return { url: target.toString(), headers, body: JSON.stringify(payload), method: requestMethod, template };
 	} catch {
 		return { error: "Invalid Generic URL format" };
 	}

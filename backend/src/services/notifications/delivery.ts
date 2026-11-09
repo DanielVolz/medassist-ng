@@ -1,8 +1,8 @@
 import nodemailer from "nodemailer";
-import { sendShoutrrrNotification } from "../../routes/settings.js";
 import { parseBoolEnv, parseIntEnv } from "../../utils/env-parsing.js";
 import type { PushNotificationOptions } from "./action-renderer.js";
 import { getDeliveryError } from "./delivery-result.js";
+import { sendShoutrrrNotification } from "./shoutrrr.js";
 
 export type EmailDeliveryRequest = {
 	to: string;

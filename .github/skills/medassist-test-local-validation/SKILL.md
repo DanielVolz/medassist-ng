@@ -49,6 +49,8 @@ Do not design or change tests, and do not inspect or triage GitHub CI failures.
 
 ## Representative Commands
 
+For Shoutrrr bridge tests/static builds, follow the isolated echo procedure in `docs/DEVELOPMENT.md`; never send to real destinations.
+
 ```bash
 cd backend && CI=true npm run test:run -- src/test/example.test.ts
 cd frontend && CI=true npm run test:run -- src/test/example.test.tsx

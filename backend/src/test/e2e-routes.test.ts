@@ -1217,7 +1217,7 @@ describe("E2E Tests with Real Routes", () => {
 			expect(response.json().error).toBe("Notification URL is required");
 		});
 
-		it("should reject test-shoutrrr with unsupported URL format", async () => {
+		it("should report a missing bridge when Shoutrrr handles an unsupported URL", async () => {
 			const response = await app.inject({
 				method: "POST",
 				url: "/settings/test-shoutrrr",
@@ -1225,8 +1225,7 @@ describe("E2E Tests with Real Routes", () => {
 			});
 
 			expect(response.statusCode).toBe(500);
-			// SSRF protection returns more specific error message
-			expect(response.json().error).toContain("HTTP/HTTPS protocols");
+			expect(response.json().error).toContain("Shoutrrr bridge missing");
 		});
 
 		it("should reject test-shoutrrr with localhost URL (SSRF protection)", async () => {

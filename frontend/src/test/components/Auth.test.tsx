@@ -711,7 +711,12 @@ describe("UserProfile", () => {
 		email: null,
 		avatarUrl: null,
 	};
-	type ProfileUser = Omit<typeof mockUser, "email"> & { authProvider?: string; email?: string | null };
+	type ProfileUser = Omit<typeof mockUser, "email" | "avatarUrl"> & {
+		authProvider?: string;
+		email?: string | null;
+		avatarUrl?: string | null;
+		oidcPictureUrl?: string;
+	};
 
 	function mockProfileRequests(
 		users: ProfileUser[],
@@ -769,6 +774,32 @@ describe("UserProfile", () => {
 			// The avatar shows first letter of username
 			expect(screen.getByText("T")).toBeInTheDocument();
 		});
+	});
+
+	it.each([
+		["local.webp", "https://images.example.test/provider.png", "/api/images/local.webp"],
+		[null, "https://images.example.test/provider.png", "https://images.example.test/provider.png"],
+	])("uses local avatars before provider pictures (%#)", async (avatarUrl, oidcPictureUrl, expected) => {
+		mockProfileRequests([{ ...mockUser, avatarUrl, oidcPictureUrl }]);
+		renderUserProfile();
+		const image = await screen.findByRole("img", { name: "testuser" });
+		expect(image).toHaveAttribute("src", expected);
+		expect(image).toHaveAttribute("referrerpolicy", "no-referrer");
+		expect(screen.queryByRole("button", { name: /auth\.removeAvatar/i }) !== null).toBe(Boolean(avatarUrl));
+		fireEvent.error(image);
+		expect(await screen.findByText("T")).toBeInTheDocument();
+		expect(screen.queryByRole("img", { name: "testuser" })).not.toBeInTheDocument();
+	});
+
+	it.each([
+		"",
+		"javascript:alert(1)",
+		"https://user:password@images.example.test/avatar.png",
+	])("falls back to initials for absent or invalid provider pictures (%#)", async (oidcPictureUrl) => {
+		mockProfileRequests([{ ...mockUser, oidcPictureUrl }]);
+		renderUserProfile();
+		expect(await screen.findByText("T")).toBeInTheDocument();
+		expect(screen.queryByRole("img", { name: "testuser" })).not.toBeInTheDocument();
 	});
 
 	it("renders change password section", async () => {
@@ -843,12 +874,30 @@ describe("UserProfile", () => {
 		await waitFor(() => {
 			expect(screen.getByText("testuser")).toBeInTheDocument();
 		});
-		expect(screen.queryByLabelText(/auth\.email/i)).not.toBeInTheDocument();
+		expect(screen.getByLabelText(/auth\.email/i).tagName).toBe("OUTPUT");
+		expect(screen.getByLabelText(/auth\.email/i)).toHaveTextContent("—");
+		expect(screen.queryByRole("textbox", { name: /auth\.email/i })).not.toBeInTheDocument();
 		expect(screen.queryByLabelText(/auth\.currentPassword/i)).not.toBeInTheDocument();
 		expect(screen.queryByLabelText(/auth\.newPassword/i)).not.toBeInTheDocument();
 		expect(screen.queryByLabelText(/auth\.confirmPassword/i)).not.toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: /auth\.saveChanges/i })).not.toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: /^auth\.changePassword$/i })).not.toBeInTheDocument();
+	});
+
+	it("displays verified provider email read-only without local credential actions", async () => {
+		mockProfileRequests([{ ...mockUser, authProvider: "oidc", email: "verified@example.com" }]);
+		renderUserProfile();
+		const email = await screen.findByLabelText(/auth\.email/i);
+		expect(email.tagName).toBe("OUTPUT");
+		expect(email).toHaveTextContent("verified@example.com");
+		expect(email).toHaveAccessibleName("auth.email");
+		expect(email).toHaveAccessibleDescription("auth.oidcEmailDescription");
+		expect(email).not.toHaveAttribute("tabindex");
+		expect(screen.queryByRole("textbox", { name: /auth\.email/i })).not.toBeInTheDocument();
+		expect(screen.getByText("auth.oidcEmailDescription")).toBeInTheDocument();
+		expect(screen.queryByText("auth.recoveryEmailDescription")).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^auth\.changePassword$/i })).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /auth\.saveChanges/i })).not.toBeInTheDocument();
 	});
 
 	it("requires confirmation only after the recovery email changes and saves it separately", async () => {

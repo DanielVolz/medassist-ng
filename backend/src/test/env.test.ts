@@ -45,6 +45,7 @@ describe("EnvSchema", () => {
 			expect(result.AUTH_ENABLED).toBe(false);
 			expect(result.ALLOW_UNAUTHENTICATED).toBe(false);
 			expect(result.REGISTRATION_ENABLED).toBe(false);
+			expect(result.FORM_LOGIN_ENABLED).toBe(true);
 			expect(result.RATE_LIMIT_MAX).toBe(100);
 			expect(result.ACCESS_TOKEN_TTL_MINUTES).toBe(15);
 			expect(result.REFRESH_TOKEN_TTL_DAYS).toBe(7);
@@ -56,6 +57,23 @@ describe("EnvSchema", () => {
 			expect(result.OIDC_AUTO_CREATE_USERS).toBe(true);
 			expect(result.OIDC_USERNAME_CLAIM).toBe("preferred_username");
 			expect(result.OIDC_PROVIDER_NAME).toBe("SSO");
+		});
+
+		it("keeps production OIDC registration opt-in and explicit form-login policy unchanged", () => {
+			const production = { NODE_ENV: "production", AUTH_ENABLED: "true", OIDC_ENABLED: "true" };
+			const defaults = EnvSchema.parse(production);
+			expect(defaults.REGISTRATION_ENABLED).toBe(false);
+			expect(defaults.FORM_LOGIN_ENABLED).toBe(true);
+			expect(defaults.ALLOW_UNAUTHENTICATED).toBe(false);
+			expect(defaults.RATE_LIMIT_MAX).toBe(100);
+
+			const oidcOnly = EnvSchema.parse({
+				...production,
+				FORM_LOGIN_ENABLED: "false",
+				REGISTRATION_ENABLED: "false",
+			});
+			expect(oidcOnly.FORM_LOGIN_ENABLED).toBe(false);
+			expect(oidcOnly.REGISTRATION_ENABLED).toBe(false);
 		});
 	});
 

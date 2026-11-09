@@ -434,25 +434,13 @@
 	position: relative;
 }
 
-.profile-avatar {
-	width: 64px;
-	height: 64px;
-	background: var(--text-tertiary);
-	color: white;
-	border-radius: 50%;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	font-weight: 700;
-	font-size: 1.75rem;
-	flex-shrink: 0;
-}
-
-.profile-avatar-img {
-	width: 64px;
-	height: 64px;
-	border-radius: 50%;
-	object-fit: cover;
+.profile-readonly-value {
+	display: block;
+	padding: 0.75rem;
+	background: var(--bg-tertiary);
+	color: var(--text-secondary);
+	border-radius: 8px;
+	overflow-wrap: anywhere;
 }
 
 .profile-avatar-actions {

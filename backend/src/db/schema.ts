@@ -10,9 +10,11 @@ export const users = sqliteTable(
 		id: integer("id").primaryKey({ autoIncrement: true }),
 		username: text("username", { length: 100 }).notNull().unique(),
 		email: text("email", { length: 255 }),
+		verifiedOidcEmail: text("verified_oidc_email", { length: 255 }).notNull().default(""),
 		passwordHash: text("password_hash", { length: 255 }),
 		credentialVersion: integer("credential_version").notNull().default(0),
 		avatarUrl: text("avatar_url", { length: 255 }),
+		oidcPictureUrl: text("oidc_picture_url").notNull().default(""),
 		authProvider: text("auth_provider", { length: 50 }).notNull().default("local"),
 		oidcSubject: text("oidc_subject", { length: 255 }), // OIDC provider's unique user ID (sub claim)
 		isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),

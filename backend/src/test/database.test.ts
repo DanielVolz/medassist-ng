@@ -316,6 +316,21 @@ describe("Database Client Utilities", () => {
 			expect(result.errors).toHaveLength(0);
 		});
 
+		it("adds an empty provider picture to legacy SQLite rows without changing local avatars", async () => {
+			await client.execute("ALTER TABLE users DROP COLUMN oidc_picture_url");
+			await client.execute("INSERT INTO users (username, avatar_url) VALUES ('picture-fixture', 'local.webp')");
+			const result = await runAlterMigrations(client);
+			expect(result).toEqual({ success: true, errors: [] });
+			const columns = await client.execute("PRAGMA table_info(users)");
+			expect(columns.rows.find((column) => column.name === "oidc_picture_url")).toMatchObject({
+				notnull: 1,
+				dflt_value: "''",
+			});
+			const rows = await client.execute("SELECT avatar_url, oidc_picture_url FROM users");
+			expect(rows.rows).toEqual([{ avatar_url: "local.webp", oidc_picture_url: "" }]);
+			expect((await runAlterMigrations(client)).success).toBe(true);
+		});
+
 		it("keeps the schedule stock rebase column backward-compatible", async () => {
 			const result = await runAlterMigrations(client);
 			expect(result.success).toBe(true);

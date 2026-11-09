@@ -162,6 +162,20 @@
       "when": 1786739770715,
       "tag": "0022_add_as_needed_intake_events",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1794254051476,
+      "tag": "0023_verified_oidc_profile_email",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1794258784718,
+      "tag": "0024_oidc_profile_picture",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: auth refresh callbacks intentionally coordinate via refs/guards */
+import { Avatar } from "@mantine/core";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useEscapeKey } from "../hooks/useEscapeKey";
@@ -9,6 +10,7 @@ import { AppTooltip, AppTooltipIcon } from "../ui/primitives/AppTooltip";
 import { createCorrelationId, withCorrelation } from "../utils/correlation";
 import { MAX_IMAGE_UPLOAD_BYTES, resolveImageUploadError } from "../utils/image-upload";
 import { log } from "../utils/logger";
+import { getUserAvatarSrc } from "../utils/user-avatar";
 import classes from "./Auth.module.css";
 import { ConfirmModal } from "./ConfirmModal";
 import { PasswordInput } from "./PasswordInput";
@@ -21,6 +23,7 @@ export interface User {
 	username: string;
 	email?: string | null;
 	avatarUrl?: string | null;
+	oidcPictureUrl?: string;
 	authProvider?: string;
 }
 
@@ -1175,18 +1178,22 @@ export function UserProfile({ onClose, showFooter = true }: { onClose?: () => vo
 
 	if (!user) return null;
 
-	const canManageLocalCredentials = user.authProvider !== "oidc";
+	const canManageLocalCredentials = (user.authProvider ?? "local") === "local";
 	const emailChanged = email !== (user.email ?? "");
 
 	return (
 		<div className={classes["profile-container"]}>
 			<div className={classes["profile-user-section"]}>
 				<div className={classes["profile-avatar-wrapper"]}>
-					{user.avatarUrl ? (
-						<img src={`/api/images/${user.avatarUrl}`} alt={user.username} className={classes["profile-avatar-img"]} />
-					) : (
-						<div className={classes["profile-avatar"]}>{user.username.charAt(0).toUpperCase()}</div>
-					)}
+					<Avatar
+						src={getUserAvatarSrc(user)}
+						alt={user.username}
+						size={64}
+						radius="xl"
+						imageProps={{ referrerPolicy: "no-referrer" }}
+					>
+						{user.username.charAt(0).toUpperCase()}
+					</Avatar>
 					<input
 						type="file"
 						ref={fileInputRef}
@@ -1237,6 +1244,27 @@ export function UserProfile({ onClose, showFooter = true }: { onClose?: () => vo
 			<div className={classes["profile-form"]}>
 				{error && <div className={classes["auth-error"]}>{error}</div>}
 				{success && <div className={classes["auth-success"]}>{success}</div>}
+
+				{user.authProvider === "oidc" && (
+					<div className={classes["profile-section"]}>
+						<div className={classes["profile-section-header"]}>
+							<h3 className={classes["profile-section-title"]}>{t("auth.oidcEmail")}</h3>
+							<p id="profile-oidc-email-help" className={classes["profile-section-description"]}>
+								{t("auth.oidcEmailDescription")}
+							</p>
+						</div>
+						<div className={classes.formGroup}>
+							<label htmlFor="profile-oidc-email">{t("auth.email")}</label>
+							<output
+								id="profile-oidc-email"
+								className={classes["profile-readonly-value"]}
+								aria-describedby="profile-oidc-email-help"
+							>
+								{user.email || "—"}
+							</output>
+						</div>
+					</div>
+				)}
 
 				{canManageLocalCredentials && (
 					<>

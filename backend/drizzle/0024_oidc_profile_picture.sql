@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `oidc_picture_url` text DEFAULT '' NOT NULL;

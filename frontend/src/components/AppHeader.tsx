@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useUnsavedChanges } from "../context";
 import { useTheme } from "../hooks/useTheme";
 import { AppTooltip } from "../ui/primitives/AppTooltip";
+import { getUserAvatarSrc } from "../utils/user-avatar";
 import classes from "./AppHeader.module.css";
 import { useAuth } from "./Auth";
 import { ThemeMenu } from "./ThemeMenu";
@@ -120,7 +121,8 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 										className={classes.userAvatar}
 										radius="xl"
 										size={36}
-										src={user.avatarUrl ? `/api/images/${user.avatarUrl}` : undefined}
+										src={getUserAvatarSrc(user)}
+										imageProps={{ referrerPolicy: "no-referrer" }}
 									>
 										{user.username.charAt(0).toUpperCase()}
 									</Avatar>
@@ -132,7 +134,8 @@ export function AppHeader({ onOpenProfile, onOpenAbout }: AppHeaderProps) {
 										alt={user.username}
 										radius="xl"
 										size={32}
-										src={user.avatarUrl ? `/api/images/${user.avatarUrl}` : undefined}
+										src={getUserAvatarSrc(user)}
+										imageProps={{ referrerPolicy: "no-referrer" }}
 									>
 										{user.username.charAt(0).toUpperCase()}
 									</Avatar>

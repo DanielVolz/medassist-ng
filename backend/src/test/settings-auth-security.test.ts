@@ -172,6 +172,35 @@ describe("Settings and API key security contracts", () => {
 		expect(Number(settingsRows.rows[0].count)).toBe(0);
 	});
 
+	it("keeps OIDC notification settings independent from provider-managed account credentials", async () => {
+		const userId = await createTestUser(testClient, { username: "oidc-settings" });
+		await testClient.execute({
+			sql: "UPDATE users SET auth_provider = 'oidc', verified_oidc_email = ? WHERE id = ?",
+			args: ["verified@example.com", userId],
+		});
+		const before = await testClient.execute("SELECT * FROM users");
+		const response = await app.inject({
+			method: "PUT",
+			url: "/settings",
+			headers: { cookie: await buildTestSessionCookie(app, userId, "oidc-settings") },
+			payload: {
+				emailEnabled: false,
+				notificationEmail: "notifications@example.com",
+				reminderDaysBefore: 7,
+				language: "en-US",
+				email: "forged@example.com",
+				verifiedOidcEmail: "forged@example.com",
+				newPassword: "ForgedPassword123",
+				authProvider: "local",
+			},
+		});
+		expect(response.statusCode).toBe(200);
+		expect((await testClient.execute("SELECT * FROM users")).rows).toEqual(before.rows);
+		expect((await testClient.execute("SELECT notification_email FROM user_settings")).rows[0].notification_email).toBe(
+			"notifications@example.com"
+		);
+	});
+
 	it("hashes API keys deterministically with the configured pepper", () => {
 		const originalPepper = mockedEnv.API_KEY_PEPPER;
 		try {

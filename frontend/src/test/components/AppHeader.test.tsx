@@ -253,6 +253,30 @@ describe("AppHeader", () => {
 		});
 	});
 
+	it.each([
+		["local.webp", "https://images.example.test/provider.png", "/api/images/local.webp"],
+		[null, "https://images.example.test/provider.png", "https://images.example.test/provider.png"],
+	])("uses the same avatar precedence in the header and dropdown (%#)", async (avatarUrl, oidcPictureUrl, expected) => {
+		(global.fetch as ReturnType<typeof vi.fn>)
+			.mockReset()
+			.mockResolvedValueOnce({ ok: true, json: async () => ({ authEnabled: true }) })
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ id: 1, username: "tester", avatarUrl, oidcPictureUrl }),
+			});
+		renderHeader();
+		const trigger = await screen.findByTestId("user-menu-trigger");
+		expect(screen.getByRole("img", { name: "tester" })).toHaveAttribute("src", expected);
+		fireEvent.click(trigger);
+		await screen.findByTestId("user-menu-dropdown");
+		await waitFor(() => expect(screen.getAllByAltText("tester")).toHaveLength(2));
+		const images = screen.getAllByAltText("tester");
+		for (const image of images) {
+			expect(image).toHaveAttribute("src", expected);
+			expect(image).toHaveAttribute("referrerpolicy", "no-referrer");
+		}
+	});
+
 	it("renders authenticated user menu and handles profile/about/settings/logout actions", async () => {
 		const onOpenProfile = vi.fn();
 		const onOpenAbout = vi.fn();

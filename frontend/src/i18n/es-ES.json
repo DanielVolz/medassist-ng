@@ -768,6 +768,8 @@
     "changePassword": "Cambiar Contraseña",
     "recoveryEmail": "Recuperación de Contraseña",
     "recoveryEmailDescription": "Usa esta dirección de correo para restablecer tu contraseña.",
+    "oidcEmail": "Correo SSO verificado",
+    "oidcEmailDescription": "Gestionado y verificado por tu proveedor de identidad.",
     "recoveryEmailConfirmationDescription": "Confirma tu contraseña actual para guardar un nuevo correo de recuperación.",
     "passwordChangeDescription": "Elige una nueva contraseña y confírmala con tu contraseña actual.",
     "currentPasswordRequired": "Ingresa tu contraseña actual para continuar.",

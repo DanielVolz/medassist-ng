@@ -46,9 +46,8 @@ describe("native notification pinned transport", () => {
 
 	afterEach(() => vi.unstubAllGlobals());
 
-	it.each(["http:", "https:"])(
-		"pins all public DNS answers for %s without changing the TLS hostname",
-		async (protocol) => {
+	for (const protocol of ["http:", "https:"]) {
+		it(`pins all public DNS answers for ${protocol} without changing the TLS hostname`, async () => {
 			lookupMock.mockResolvedValueOnce([
 				{ address: "93.184.216.34", family: 4 },
 				{ address: "2606:4700:4700::1111", family: 6 },
@@ -79,8 +78,8 @@ describe("native notification pinned transport", () => {
 			expect(callback).toHaveBeenLastCalledWith(null, "2606:4700:4700::1111", 6);
 			expect(lookupMock).toHaveBeenCalledTimes(1);
 			expect(closeMock).toHaveBeenCalledTimes(1);
-		}
-	);
+		});
+	}
 
 	it.each([
 		[
@@ -98,13 +97,12 @@ describe("native notification pinned transport", () => {
 		expect(requestMock).not.toHaveBeenCalled();
 	});
 
-	it.each(["file:///tmp/fixture", "ftp://push.example.test/topic", "http://127.0.0.1/topic"])(
-		"rejects unsafe targets: %s",
-		async (url) => {
+	for (const url of ["file:///tmp/fixture", "ftp://push.example.test/topic", "http://127.0.0.1/topic"]) {
+		it(`rejects unsafe target: ${url}`, async () => {
 			expect((await sendNativePush(url, "Title", "Body")).success).toBe(false);
 			expect(requestMock).not.toHaveBeenCalled();
-		}
-	);
+		});
+	}
 
 	it("allows only the existing ntfy private-target exception and preserves its message ID", async () => {
 		lookupMock.mockResolvedValue([{ address: "192.168.1.5", family: 4 }]);
@@ -125,12 +123,11 @@ describe("native notification pinned transport", () => {
 		expect(closeMock).toHaveBeenCalledTimes(1);
 	});
 
-	it.each([
+	for (const { host, ip } of [
 		{ host: "push.fixture.test", ip: "93.184.216.34" },
 		{ host: "ntfy.fixture.test", ip: "127.0.0.1" },
-	])(
-		"pins $host and rejects redirects using a real dispatcher with injected loopback transport",
-		async ({ host, ip }) => {
+	]) {
+		it(`pins ${host} and rejects redirects using a real dispatcher with injected loopback transport`, async () => {
 			const { Agent } = await vi.importActual<typeof import("undici")>("undici");
 			const paths: string[] = [];
 			const server = createServer((req, res) => {
@@ -170,6 +167,6 @@ describe("native notification pinned transport", () => {
 				if (!agent.destroyed) await agent.close();
 				await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 			}
-		}
-	);
+		});
+	}
 });

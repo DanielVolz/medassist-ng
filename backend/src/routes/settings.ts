@@ -15,6 +15,7 @@ import {
 	renderNotificationActionPayload,
 } from "../services/notifications/action-renderer.js";
 import { getSmtpConfig, sendEmailNotification } from "../services/notifications/delivery.js";
+import { sendNativePush } from "../services/notifications/native-push.js";
 import {
 	buildGenericNotificationRequest,
 	classifyTestEmailFailure,
@@ -777,21 +778,13 @@ export async function sendShoutrrrNotification(
 		}
 
 		// Use ONLY the reconstructed URL from validation - never the original urlStr
-		const { url: sanitizedUrl, isNtfy, auth } = validation;
+		const { url: sanitizedUrl, isNtfy } = validation;
 
 		let targetUrl: string;
 		const method = "POST";
 		let headers: Record<string, string> = {};
 		let body: string | undefined;
 		const renderedPayload = renderNotificationActionPayload(urlStr, message, options);
-
-		// Remove emojis from title for header compatibility
-		const cleanTitle = title
-			.replace(
-				/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{2000}-\u{206F}]|⚠|️/gu,
-				""
-			)
-			.trim();
 
 		// Determine notification type based on URL hostname
 		// Use JSON format only for known webhook services that require it
@@ -823,21 +816,7 @@ export async function sendShoutrrrNotification(
 		// Default to ntfy-style (plain text with Title header) for all other HTTP URLs
 		// This works for ntfy, Apprise, and most simple push services
 		if (!isJsonWebhook) {
-			targetUrl = sanitizedUrl;
-			// Use RFC 2047 Base64 encoding for Title header to safely pass non-ASCII
-			// characters (umlauts, accents, etc.) through HTTP headers
-			const encodedTitle = `=?UTF-8?B?${Buffer.from(cleanTitle, "utf-8").toString("base64")}?=`;
-			headers = { Title: encodedTitle, Tags: "pill" };
-			body = renderedPayload.message;
-
-			// Add auth if present (extracted during sanitization)
-			if (auth) {
-				headers.Authorization = `Basic ${Buffer.from(`${auth.user}:${auth.pass}`).toString("base64")}`;
-			}
-
-			if (isNtfy) {
-				headers = { ...headers, ...renderedPayload.headers };
-			}
+			return sendNativePush(urlStr, title, message, options);
 		} else if (sanitizedUrl.startsWith("http://") || sanitizedUrl.startsWith("https://")) {
 			targetUrl = sanitizedUrl;
 			headers = { "Content-Type": "application/json" };

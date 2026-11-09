@@ -94,6 +94,106 @@ npm run test:dev-ui
 `npm run test:dev-ui` needs free ports 5176 and 5177, so stop a running sandbox
 first.
 
+### Opt-in OIDC Sandbox
+
+The anonymous `npm run dev:ui` command above is unchanged. For an isolated,
+authenticated sandbox, explicitly choose:
+
+```bash
+npm run dev:ui:oidc
+```
+
+Open **`http://localhost:5176/dashboard`** (not the anonymous sandbox's
+`127.0.0.1` URL). The exact callback URI is:
+
+```text
+http://localhost:5176/api/auth/oidc/callback
+```
+
+The launcher finds the original/primary worktree using `git worktree list`
+(the first worktree), then reads its root `.env` locally. In a linked worktree,
+this is deliberately **not** the linked worktree's `.env`. It parses only
+`OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and the explicit SMTP
+allowlist: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`,
+`SMTP_SECURE` (not `SMTP_TOKEN`). The three OIDC settings are required;
+SMTP settings are optional. Selected settings use single-line dotenv assignments
+(quoted values are supported); empty SMTP settings are not forwarded.
+The issuer must be an HTTPS URL without embedded credentials. Missing or invalid
+configuration fails before any service starts, reporting key names, never values.
+The file is neither sourced nor copied, and variable expansion is not performed.
+Only allowlisted lines are parsed, not the entire file into `process.env`.
+No notification destinations, production JWT/cookie/API secrets, database
+settings, optional OIDC settings, or LAN/public URL configuration are imported
+from either `.env` or the invoking shell. The original `PUBLIC_APP_URL`
+assignment is never selected or parsed; SMTP values are never logged.
+
+After extraction, the launcher forces `AUTH_ENABLED=true`, `OIDC_ENABLED=true`,
+`FORM_LOGIN_ENABLED=true`, `REGISTRATION_ENABLED=true`,
+`OIDC_REDIRECT_URI=http://localhost:5176/api/auth/oidc/callback`, and
+`CORS_ORIGINS=http://localhost:5176`. It also forces
+`PUBLIC_APP_URL=http://localhost:5176/`, overriding any invoking-shell URL so
+recovery links remain loopback-local. Backend dotenv loading remains disabled.
+Both services bind only to `127.0.0.1`, on the same fixed ports 5176/5177.
+OIDC mode never uses the anonymous mode's optional LAN binding.
+It shares the launcher lock with anonymous mode, so the two cannot run together.
+If another instance is running, leave it alone; arrange an intentional mode
+switch separately rather than restarting or removing its lock.
+
+OIDC mode stores its database and images only in ignored `.ui-dev/oidc-data/`;
+it never seeds anonymous medication/person/image fixtures or writes the anonymous
+seed marker. Schedulers remain disabled. Local JWT, refresh, and cookie secrets
+are generated afresh in memory for each launch, not imported or written to disk:
+restarting invalidates sandbox sessions and API keys. Local username/password login
+and registration remain available alongside Pocket ID, including when users already
+exist. This opt-in, loopback-only override does not change anonymous `dev:ui`,
+production defaults, `.env`, or existing accounts. This mode does not change
+production authentication or the identity provider's client configuration.
+Only fictional test data should be entered. A successful live login also requires
+the identity provider to already accept the exact callback URI above; the launcher
+does not modify Pocket ID or any external client configuration.
+
+For a new local account, use **Create account** on the login screen; the UI
+registers and then signs in automatically. For API clients, registration uses
+`POST /api/auth/register` with JSON fields `username`, `email`, and `password`;
+the registration endpoint returns `201` without signing in. Then
+`POST /api/auth/login` with `username`, `password`, and optional boolean
+`rememberMe` establishes browser cookies. Use the same `http://localhost:5176`
+origin for both. Usernames are 3–50 letters, digits, underscores or hyphens;
+email must be valid (at most 255 characters), and passwords must be 8–128 characters.
+Existing login/register limits remain five requests per 15 minutes. Local registration creates a
+separate local identity, not a password for or a link to a Pocket ID account.
+Do not reset data or recreate an existing test user. Leave an already-running
+sandbox untouched; launcher changes take effect only on a later intentional restart.
+
+**Missing Forgot password:** the login link follows the server's
+`passwordResetEnabled` gate: auth and form login must be enabled, the public URL
+must be safe, and SMTP host, user, and sender must be configured. Previously,
+OIDC mode supplied neither SMTP nor a public URL. With the allowlist above and
+the forced local URL, the existing gate can enable recovery for **local accounts
+only**; Pocket ID/OIDC accounts remain barred server-side from both requesting
+recovery and consuming reset tokens, including legacy accounts with stored hashes.
+Use the identity provider for those accounts.
+
+SMTP credentials may be live. Startup and the configuration checks send no email;
+submitting a local recovery request can send one. Do not submit recovery/test-email
+actions, edit account emails, or replace an existing `.invalid` recipient merely
+to validate configuration. Delivery testing requires separate authorization for an
+intended recipient; no recipient change is part of this setup.
+
+The focused configuration checks below never start services, bind ports, contact
+the provider, or read the real `.env`; fixtures are disposable:
+
+```bash
+npm run test:dev-ui:config
+```
+
+To run the pre-existing non-binding launcher checks as well, without running the
+two occupied-port integration tests:
+
+```bash
+node --test --test-name-pattern='sandbox network|sandbox backend environment|direct backend entry|the UI Vite server' tools/ui-sandbox/launcher.test.mjs
+```
+
 ### README Demo Media
 
 README screenshots in `docs/screenshots/` and the auto-playing demo

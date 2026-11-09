@@ -55,6 +55,21 @@ Browser cookie, CORS, CSRF, Bearer token, and API-key security behavior is docum
 | `API_KEY_LAST_USED_WRITE_INTERVAL_MINUTES` | `15` | Minimum interval between API key `lastUsedAt` database writes per key |
 | `SHARE_TOKEN_TTL_DAYS` | `90` | Default lifetime for newly generated public share links |
 
+Only the opt-in loopback `npm run dev:ui:oidc` sandbox overrides both
+`FORM_LOGIN_ENABLED` and `REGISTRATION_ENABLED` to `true`, allowing local forms
+and their existing API flows alongside Pocket ID. Ordinary anonymous `dev:ui`
+and production defaults above are unchanged; no `.env` or provider changes are
+needed. See [the OIDC sandbox workflow](DEVELOPMENT.md#opt-in-oidc-sandbox) for
+isolation, account creation, and restart/data precautions.
+
+That OIDC sandbox also imports only `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+`SMTP_PASS`, `SMTP_FROM`, and `SMTP_SECURE` from the primary worktree's `.env`
+(not `SMTP_TOKEN` or recipients), and forces `PUBLIC_APP_URL=http://localhost:5176/`
+without selecting or parsing the original URL. **Forgot password** requires auth,
+form login, a safe public URL, and SMTP host/user/from. Recovery remains local-account
+only; OIDC accounts cannot request recovery or consume reset tokens. No production
+recovery policy changes, startup email, or recipient changes are implied.
+
 Generate secrets with `openssl rand -hex 32`.
 
 API key hashes depend on the selected pepper: `API_KEY_PEPPER`, then `JWT_SECRET`,

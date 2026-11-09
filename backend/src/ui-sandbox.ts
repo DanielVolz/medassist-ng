@@ -3,13 +3,20 @@ import { fileURLToPath } from "node:url";
 
 async function main(): Promise<void> {
 	const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-	const expectedDataDir = resolve(repositoryRoot, ".ui-dev/data");
+	const oidcMode = process.env.UI_SANDBOX_MODE === "oidc";
+	const expectedDataDir = resolve(repositoryRoot, oidcMode ? ".ui-dev/oidc-data" : ".ui-dev/data");
+	const validOidcSettings =
+		!oidcMode ||
+		(process.env.OIDC_ENABLED === "true" &&
+			process.env.OIDC_REDIRECT_URI === "http://localhost:5176/api/auth/oidc/callback" &&
+			process.env.CORS_ORIGINS === "http://localhost:5176");
 	if (
 		process.env.UI_SANDBOX_LAUNCHER !== "1" ||
 		resolve(process.env.DATA_DIR ?? "") !== expectedDataDir ||
 		process.env.DOTENV_PATH !== "/dev/null" ||
 		process.env.NODE_ENV !== "development" ||
-		process.env.AUTH_ENABLED !== "false" ||
+		process.env.AUTH_ENABLED !== (oidcMode ? "true" : "false") ||
+		!validOidcSettings ||
 		process.env.ALLOW_UNAUTHENTICATED !== "false"
 	) {
 		throw new Error("The UI sandbox backend must be started by its launcher with isolated development settings.");
@@ -22,8 +29,8 @@ async function main(): Promise<void> {
 			import("./plugins/env.js"),
 			import("./utils/server-config.js"),
 		]);
-	if (env.AUTH_ENABLED || env.NODE_ENV !== "development") {
-		throw new Error("The UI sandbox requires development mode with AUTH_ENABLED=false.");
+	if (env.AUTH_ENABLED !== oidcMode || env.NODE_ENV !== "development") {
+		throw new Error("The UI sandbox requires development mode with authentication matching its launcher mode.");
 	}
 	await migrationsReady;
 	const imagesDir = ensureImagesDirectory();

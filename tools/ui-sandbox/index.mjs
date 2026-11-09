@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { lookup } from "node:dns/promises";
@@ -10,7 +11,6 @@ import { demoMedications } from "./seed.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sandboxDir = resolve(root, ".ui-dev");
-const dataDir = resolve(sandboxDir, "data");
 const assetsDir = resolve(root, "tools/ui-sandbox/assets");
 const lockPath = resolve(sandboxDir, "launcher.lock");
 const seedMarker = resolve(sandboxDir, "seed-complete.json");
@@ -21,6 +21,9 @@ const requireBackend = createRequire(resolve(root, "backend/package.json"));
 const dotenv = requireBackend("dotenv");
 const sharp = requireBackend("sharp");
 const smtpEnvKeys = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_TOKEN", "SMTP_FROM", "SMTP_SECURE"];
+const oidcEnvKeys = ["OIDC_ISSUER_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET"];
+const oidcSmtpEnvKeys = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "SMTP_SECURE"];
+const oidcRedirectUri = "http://localhost:5176/api/auth/oidc/callback";
 const children = new Set();
 let lockFd;
 let stopping = false;
@@ -109,6 +112,116 @@ export function buildSandboxBackendEnv(projectRoot = root, inheritedEnv = proces
 		},
 		inheritedEnv
 	);
+}
+
+function originalWorktreeEnvPath(projectRoot) {
+	try {
+		const worktrees = execFileSync("git", ["worktree", "list", "--porcelain", "-z"], {
+			cwd: projectRoot,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		});
+		const first = worktrees.split("\0")[0];
+		if (!first.startsWith("worktree ")) fail("Missing primary worktree.");
+		return resolve(first.slice("worktree ".length), ".env");
+	} catch {
+		fail("Cannot locate the original worktree .env for the OIDC sandbox.");
+	}
+}
+
+function loadSandboxOidcEnv(envPath) {
+	let contents;
+	try {
+		contents = readFileSync(envPath, "utf8");
+	} catch {
+		fail("Cannot read the original worktree .env for the OIDC sandbox.");
+	}
+	const selected = {};
+	// Parse only allowlisted assignments, never source or expand the file.
+	// Credentials must be single-line dotenv values; reject incomplete quotes.
+	const assignment = new RegExp(`^\\s*(?:export\\s+)?(${[...oidcEnvKeys, ...oidcSmtpEnvKeys].join("|")})\\s*=\\s*(.*)$`);
+	for (const line of contents.split(/\r?\n/)) {
+		const match = assignment.exec(line);
+		if (!match) continue;
+		const [, key, value] = match;
+		if (["'", '"', "`"].includes(value[0]) && !value.slice(1).includes(value[0])) {
+			fail(`OIDC sandbox requires a single-line dotenv value for ${key}.`);
+		}
+		const parsedValue = dotenv.parse(line)[key];
+		if (oidcEnvKeys.includes(key) || parsedValue !== "") selected[key] = parsedValue;
+	}
+	const missing = oidcEnvKeys.filter((key) => !selected[key]?.trim());
+	if (missing.length) fail(`OIDC sandbox is missing required settings: ${missing.join(", ")}.`);
+	try {
+		const issuer = new URL(selected.OIDC_ISSUER_URL);
+		if (issuer.protocol !== "https:" || issuer.username || issuer.password) throw new Error();
+	} catch {
+		fail("OIDC sandbox requires a valid HTTPS OIDC_ISSUER_URL without embedded credentials.");
+	}
+	return selected;
+}
+
+export async function buildSandboxLaunchConfig({
+	mode = "anonymous",
+	projectRoot = root,
+	inheritedEnv = process.env,
+	oidcEnvPath,
+} = {}) {
+	if (!["anonymous", "oidc"].includes(mode)) fail("Unknown UI sandbox mode.");
+	if (mode === "anonymous") {
+		const network = await resolveSandboxNetwork(projectRoot);
+		return {
+			mode,
+			network,
+			backendEnv: buildSandboxBackendEnv(projectRoot, inheritedEnv, network),
+			appUrl: new URL("dashboard", network.publicAppUrl ?? `http://127.0.0.1:${frontendPort}/`).href,
+		};
+	}
+	const oidc = loadSandboxOidcEnv(oidcEnvPath ?? originalWorktreeEnvPath(projectRoot));
+	return {
+		mode,
+		network: { host: "127.0.0.1", publicAppUrl: undefined },
+		appUrl: `http://localhost:${frontendPort}/dashboard`,
+		backendEnv: minimalEnv({
+			...oidc,
+			NODE_ENV: "development",
+			UI_SANDBOX_LAUNCHER: "1",
+			UI_SANDBOX_MODE: "oidc",
+			AUTH_ENABLED: "true",
+			OIDC_ENABLED: "true",
+			OIDC_PROVIDER_NAME: "Pocket ID",
+			OIDC_REDIRECT_URI: oidcRedirectUri,
+			CORS_ORIGINS: `http://localhost:${frontendPort}`,
+			ALLOW_UNAUTHENTICATED: "false",
+			FORM_LOGIN_ENABLED: "true",
+			REGISTRATION_ENABLED: "true",
+			// Never extract the primary worktree's public URL; recovery links stay local.
+			PUBLIC_APP_URL: `http://localhost:${frontendPort}/`,
+			PORT: String(backendPort),
+			DATA_DIR: resolve(projectRoot, ".ui-dev", "oidc-data"),
+			DOTENV_PATH: "/dev/null",
+			MEDICATION_ENRICHMENT_STARTUP_REFRESH_ENABLED: "false",
+			// Sandbox-only keys, not production JWT/cookie/API secrets.
+			JWT_SECRET: randomBytes(32).toString("hex"),
+			REFRESH_SECRET: randomBytes(32).toString("hex"),
+			COOKIE_SECRET: randomBytes(32).toString("hex"),
+		}, inheritedEnv),
+	};
+}
+
+export async function prepareSandboxData(mode, seed = initializeSandboxData) {
+	if (mode === "oidc") return;
+	if (mode !== "anonymous") fail("Unknown UI sandbox mode.");
+	await seed();
+}
+
+export function buildSandboxFrontendEnv({ network }, inheritedEnv = process.env) {
+	return minimalEnv({
+		NODE_ENV: "development",
+		BACKEND_URL: backendUrl,
+		UI_SANDBOX_HOST: network.host,
+		...(network.publicAppUrl ? { PUBLIC_APP_URL: network.publicAppUrl } : {}),
+	}, inheritedEnv);
 }
 
 function startNode(args, options, label) {
@@ -280,6 +393,11 @@ async function initializeSandboxData() {
 }
 
 async function start() {
+	const args = process.argv.slice(2);
+	if (args.some((arg) => arg !== "--oidc")) fail("Usage: dev:ui or dev:ui:oidc.");
+	const config = await buildSandboxLaunchConfig({ mode: args.includes("--oidc") ? "oidc" : "anonymous" });
+	const { network, backendEnv: safeEnv, appUrl, mode } = config;
+	const dataDir = safeEnv.DATA_DIR;
 	mkdirSync(sandboxDir, { recursive: true });
 	try {
 		lockFd = openSync(lockPath, "wx", 0o600);
@@ -295,14 +413,15 @@ async function start() {
 	runBuild();
 	assertRunning();
 
-	const network = await resolveSandboxNetwork(root);
-	const appUrl = new URL("dashboard", network.publicAppUrl ?? `http://127.0.0.1:${frontendPort}/`).href;
-	console.log(network.publicAppUrl
-		? "Sandbox LAN action URL validated; frontend binds only to its local private interface."
-		: "Sandbox remains loopback-only; no usable local private action URL was established. Do not send actionable reminders.");
-	const safeEnv = buildSandboxBackendEnv(root, process.env, network);
-	const availableSmtpKeys = smtpEnvKeys.filter((key) => safeEnv[key] !== undefined);
-	console.log(`Sandbox SMTP configuration keys available: ${availableSmtpKeys.join(", ") || "none"}`);
+	if (mode === "oidc") {
+		console.log(`OIDC sandbox is loopback-only. Required callback: ${oidcRedirectUri}`);
+	} else {
+		console.log(network.publicAppUrl
+			? "Sandbox LAN action URL validated; frontend binds only to its local private interface."
+			: "Sandbox remains loopback-only; no usable local private action URL was established. Do not send actionable reminders.");
+		const availableSmtpKeys = smtpEnvKeys.filter((key) => safeEnv[key] !== undefined);
+		console.log(`Sandbox SMTP configuration keys available: ${availableSmtpKeys.join(", ") || "none"}`);
+	}
 	const backend = startNode(
 		[resolve(root, "backend/node_modules/tsx/dist/cli.mjs"), resolve(root, "backend/src/ui-sandbox.ts")],
 		{ cwd: root, env: safeEnv },
@@ -312,29 +431,26 @@ async function start() {
 	await waitForReady(backend, "Backend");
 	await waitForUrl(`${backendUrl}/health`, "Backend");
 	assertRunning();
-	await initializeSandboxData();
+	await prepareSandboxData(mode);
 	assertRunning();
 
 	const frontend = startNode(
 		[resolve(root, "frontend/scripts/ui-sandbox-vite.mjs")],
 		{
 			cwd: resolve(root, "frontend"),
-			env: minimalEnv({
-				NODE_ENV: "development",
-				BACKEND_URL: backendUrl,
-				UI_SANDBOX_HOST: network.host,
-				...(network.publicAppUrl ? { PUBLIC_APP_URL: network.publicAppUrl } : {}),
-			}),
+			env: buildSandboxFrontendEnv(config),
 		},
 		"Frontend"
 	);
 	await waitForReady(frontend, "Frontend");
 	if (network.host === "127.0.0.1") {
-		await waitForUrl(appUrl, "Frontend");
+		await waitForUrl(`http://127.0.0.1:${frontendPort}/dashboard`, "Frontend");
 	}
 
 	console.log(`\nUI sandbox ready: ${appUrl}`);
-	console.log("Anonymous sandbox demo only; this does not test authenticated login or registration.");
+	console.log(mode === "oidc"
+		? "Authenticated OIDC sandbox; no anonymous demo fixtures are seeded."
+		: "Anonymous sandbox demo only; this does not test authenticated login or registration.");
 	console.log(`Persistent demo data: ${dataDir}`);
 	console.log("Press Ctrl+C to stop both local processes.");
 }

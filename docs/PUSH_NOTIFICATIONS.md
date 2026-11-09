@@ -119,8 +119,8 @@ For service URL formats and options, see the [maintained Shoutrrr fork documenta
 
 The production and Docker development images include the bridge. When running
 the backend directly on your host, build it and set `SHOUTRRR_BINARY_PATH` as
-described in [DEVELOPMENT.md](DEVELOPMENT.md). Without the binary, non-ntfy
-delivery fails explicitly; it does not fall back to the former custom clients.
+described in [DEVELOPMENT.md](DEVELOPMENT.md). Without the binary,
+bridge-backed delivery fails explicitly; it does not fall back to the former custom clients.
 
 ## Troubleshooting
 

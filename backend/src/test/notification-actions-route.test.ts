@@ -51,6 +51,21 @@ vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));
 
 vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
+// Keep the route response fixtures shared by native dispatcher requests and ntfy deletion fetches.
+// No request in this suite may reach the network.
+vi.mock("undici", () => ({
+	Agent: class {
+		async request({ origin, path, ...options }: { origin: string; path: string }) {
+			const response = await fetchMock(`${origin}${path}`, options);
+			return {
+				statusCode: response.status ?? (response.ok ? 200 : 500),
+				body: { json: response.json, text: response.text, dump: async () => {} },
+			};
+		}
+		async close() {}
+	},
+}));
+
 const { notificationActionRoutes } = await import("../routes/notification-actions.js");
 const { createNotificationActionContext } = await import("../services/notification-actions-service.js");
 
@@ -405,7 +420,6 @@ describe("notification action routes", () => {
 			expect.objectContaining({
 				method: "POST",
 				body: "Take your medication now\n\n✅ This dose was marked as taken.",
-				redirect: "error",
 				headers: expect.objectContaining({
 					Authorization: expect.stringMatching(/^Basic /),
 					"X-Sequence-ID": context.sequenceId,
@@ -468,7 +482,6 @@ describe("notification action routes", () => {
 			expect.objectContaining({
 				method: "POST",
 				body: "Take your medication now\n\n⏭️ This intake was marked as skipped.",
-				redirect: "error",
 				headers: expect.objectContaining({
 					Authorization: expect.stringMatching(/^Basic /),
 					"X-Sequence-ID": context.sequenceId,

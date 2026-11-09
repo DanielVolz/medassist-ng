@@ -1,5 +1,6 @@
-import { sanitizeNotificationUrl, validateNotificationTargetUrl } from "../settings-service.js";
+import { sanitizeNotificationUrl } from "../settings-service.js";
 import { type PushNotificationOptions, renderNotificationActionPayload } from "./action-renderer.js";
+import { createNotificationTargetDispatcher } from "./target-transport.js";
 
 export async function sendNativePush(
 	urlStr: string,
@@ -24,39 +25,41 @@ export async function sendNativePush(
 		};
 		if (auth) headers.Authorization = `Basic ${Buffer.from(`${auth.user}:${auth.pass}`).toString("base64")}`;
 		if (isNtfy) headers = { ...headers, ...renderedPayload.headers };
-		const targetValidationError = await validateNotificationTargetUrl(targetUrl, { allowLocalNtfyTarget: isNtfy });
-		if (targetValidationError) return { success: false, error: targetValidationError };
-
-		let safeTargetUrl: URL;
-		try {
-			safeTargetUrl = new URL(targetUrl);
-		} catch {
-			return { success: false, error: "Invalid notification target URL" };
-		}
-		if (safeTargetUrl.protocol !== "http:" && safeTargetUrl.protocol !== "https:") {
-			return { success: false, error: "Only HTTP/HTTPS protocols are allowed" };
-		}
-
-		const response = await fetch(safeTargetUrl, {
-			method: "POST",
-			headers,
-			body: renderedPayload.message,
-			redirect: "error",
+		const targetResult = await createNotificationTargetDispatcher(targetUrl, {
+			allowLocalNtfyTarget: isNtfy,
 		});
-		if (!response.ok) {
-			const errorText = await response.text();
-			return { success: false, error: `HTTP ${response.status}: ${errorText}` };
-		}
-		let providerMessageId: string | undefined;
-		if (isNtfy) {
-			try {
-				const payload = (await response.json()) as { id?: unknown };
-				providerMessageId = typeof payload.id === "string" && payload.id.length > 0 ? payload.id : undefined;
-			} catch {
-				providerMessageId = undefined;
+		if ("error" in targetResult) return { success: false, error: targetResult.error };
+		const { target, dispatcher } = targetResult;
+		try {
+			// Like Generic notifications, request never follows redirects and uses only pinned DNS answers.
+			const response = await dispatcher.request({
+				origin: target.origin,
+				path: `${target.pathname}${target.search}`,
+				method: "POST",
+				headers,
+				body: renderedPayload.message,
+				headersTimeout: 10_000,
+				bodyTimeout: 10_000,
+			});
+			if (response.statusCode < 200 || response.statusCode >= 300) {
+				const errorText = await response.body.text();
+				return { success: false, error: `HTTP ${response.statusCode}: ${errorText}` };
 			}
+			let providerMessageId: string | undefined;
+			if (isNtfy) {
+				try {
+					const payload = (await response.body.json()) as { id?: unknown };
+					providerMessageId = typeof payload.id === "string" && payload.id.length > 0 ? payload.id : undefined;
+				} catch {
+					providerMessageId = undefined;
+				}
+			} else {
+				await response.body.dump();
+			}
+			return { success: true, providerMessageId };
+		} finally {
+			await dispatcher.close();
 		}
-		return { success: true, providerMessageId };
 	} catch (error) {
 		return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
 	}

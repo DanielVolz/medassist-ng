@@ -477,7 +477,7 @@ describe("Real route coverage: settings/export/report", () => {
 	});
 
 	it("POST /settings/test-shoutrrr returns 200 for a valid ntfy target", async () => {
-		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-test-message-id" }) });
+		requestMock.mockResolvedValue({ statusCode: 200, body: { json: async () => ({ id: "ntfy-test-message-id" }) } });
 
 		const response = await app.inject({
 			method: "POST",
@@ -487,9 +487,9 @@ describe("Real route coverage: settings/export/report", () => {
 
 		expect(response.statusCode).toBe(200);
 		expect(response.json()).toEqual({ success: true, message: "Test notification sent successfully" });
-		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(requestMock).toHaveBeenCalledTimes(1);
 
-		const [, requestInit] = fetchMock.mock.calls[0] ?? [];
+		const [requestInit] = requestMock.mock.calls[0] ?? [];
 		const headers = (requestInit?.headers ?? {}) as Record<string, string>;
 		expect(headers["X-Sequence-ID"]).toEqual(expect.stringMatching(/^medassist-/));
 		expect(JSON.parse(headers.Actions ?? "[]")).toEqual([
@@ -563,32 +563,31 @@ describe("Real route coverage: settings/export/report", () => {
 	});
 
 	it("sendShoutrrrNotification allows explicit local ntfy targets and blocks redirects", async () => {
-		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-local-message-id" }) });
+		requestMock.mockResolvedValue({ statusCode: 200, body: { json: async () => ({ id: "ntfy-local-message-id" }) } });
 
 		const result = await sendShoutrrrNotification("ntfy://localhost/medassist", "Title", "Message");
 
 		expect(result).toEqual({ success: true, providerMessageId: "ntfy-local-message-id" });
-		expect(fetchMock).toHaveBeenCalledWith(
-			"https://localhost/medassist",
-			expect.objectContaining({ method: "POST", redirect: "error" })
+		expect(requestMock).toHaveBeenCalledWith(
+			expect.objectContaining({ origin: "https://localhost", path: "/medassist", method: "POST" })
 		);
 	});
 
 	it("sendShoutrrrNotification handles ntfy auth and safe URL reconstruction", async () => {
-		fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ id: "ntfy-message-id" }) });
+		requestMock.mockResolvedValue({ statusCode: 200, body: { json: async () => ({ id: "ntfy-message-id" }) } });
 
 		const result = await sendShoutrrrNotification("ntfy://user:pass@ntfy.sh/mytopic", "Title ä", "Message");
 
 		expect(result.success).toBe(true);
 		expect(result.providerMessageId).toBe("ntfy-message-id");
-		expect(fetchMock).toHaveBeenCalledWith(
-			"https://ntfy.sh/mytopic",
+		expect(requestMock).toHaveBeenCalledWith(
 			expect.objectContaining({
+				origin: "https://ntfy.sh",
+				path: "/mytopic",
 				headers: expect.objectContaining({
 					Authorization: expect.stringMatching(/^Basic /),
 				}),
 				method: "POST",
-				redirect: "error",
 			})
 		);
 	});
@@ -603,7 +602,7 @@ describe("Real route coverage: settings/export/report", () => {
 	});
 
 	it("sendShoutrrrNotification returns HTTP response errors for ntfy-style endpoints", async () => {
-		fetchMock.mockResolvedValue({ ok: false, status: 429, text: () => Promise.resolve("rate limited") });
+		requestMock.mockResolvedValue({ statusCode: 429, body: { text: async () => "rate limited" } });
 
 		const result = await sendShoutrrrNotification("https://ntfy.sh/medassist", "Title", "Body");
 
@@ -640,8 +639,9 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		const [targetUrl, requestInit] = fetchMock.mock.calls[0];
-		expect(targetUrl).toBe("http://push.example.com/basepath/message?token=token123");
+		const [requestInit] = requestMock.mock.calls[0];
+		expect(requestInit.origin).toBe("http://push.example.com");
+		expect(requestInit.path).toBe("/basepath/message?token=token123");
 		expect(requestInit.body).toBe("Body\n\n(priority=8)");
 		expect(requestInit.headers).toMatchObject({ Tags: "pill" });
 	});

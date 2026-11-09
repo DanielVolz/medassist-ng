@@ -17,7 +17,7 @@
     "release:preflight": "node scripts/release-preflight.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.5",
     "husky": "^9.1.0",
     "lint-staged": "^17.6.0"
   },

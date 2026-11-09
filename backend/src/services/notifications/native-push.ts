@@ -26,7 +26,18 @@ export async function sendNativePush(
 		if (isNtfy) headers = { ...headers, ...renderedPayload.headers };
 		const targetValidationError = await validateNotificationTargetUrl(targetUrl, { allowLocalNtfyTarget: isNtfy });
 		if (targetValidationError) return { success: false, error: targetValidationError };
-		const response = await fetch(targetUrl, {
+
+		let safeTargetUrl: URL;
+		try {
+			safeTargetUrl = new URL(targetUrl);
+		} catch {
+			return { success: false, error: "Invalid notification target URL" };
+		}
+		if (safeTargetUrl.protocol !== "http:" && safeTargetUrl.protocol !== "https:") {
+			return { success: false, error: "Only HTTP/HTTPS protocols are allowed" };
+		}
+
+		const response = await fetch(safeTargetUrl, {
 			method: "POST",
 			headers,
 			body: renderedPayload.message,

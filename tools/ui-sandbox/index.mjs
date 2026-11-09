@@ -451,7 +451,7 @@ async function start() {
 	console.log(mode === "oidc"
 		? "Authenticated OIDC sandbox; no anonymous demo fixtures are seeded."
 		: "Anonymous sandbox demo only; this does not test authenticated login or registration.");
-	console.log(`Persistent demo data: ${dataDir}`);
+	console.log("Sandbox data remains in its configured local directory.");
 	console.log("Press Ctrl+C to stop both local processes.");
 }
 

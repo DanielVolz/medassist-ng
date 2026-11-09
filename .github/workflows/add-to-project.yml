@@ -89,7 +89,7 @@ jobs:
 
       - name: Add issue to project (idempotent)
         continue-on-error: true
-        uses: actions/add-to-project@v2.0.0
+        uses: actions/add-to-project@v2.0.1
         with:
           project-url: ${{ vars.PROJECT_URL }}
           github-token: ${{ steps.project-token.outputs.token }}

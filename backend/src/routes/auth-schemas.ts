@@ -156,6 +156,7 @@ export const getProfileRouteSchema = {
 				username: { type: "string" },
 				email: { type: ["string", "null"], format: "email" },
 				avatarUrl: { type: ["string", "null"] },
+				oidcPictureUrl: { type: "string" },
 				authProvider: { type: "string" },
 				createdAt: { type: "string", format: "date-time" },
 				lastLoginAt: { type: ["string", "null"], format: "date-time" },

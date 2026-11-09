@@ -1154,6 +1154,8 @@
     "changePassword": "Alterar a senha",
     "recoveryEmail": "Recuperação de senha",
     "recoveryEmailDescription": "Use este endereço de e-mail para redefinir sua senha.",
+    "oidcEmail": "E-mail SSO verificado",
+    "oidcEmailDescription": "Gerido e verificado pelo seu fornecedor de identidade.",
     "recoveryEmailConfirmationDescription": "Confirme sua senha actual para gravar um novo e-mail de recuperação.",
     "passwordChangeDescription": "Escolha uma nova senha e confirme-a com sua senha actual.",
     "currentPasswordRequired": "Digite sua senha actual para continuar.",

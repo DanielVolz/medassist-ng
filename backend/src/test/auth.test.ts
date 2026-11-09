@@ -670,6 +670,36 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			expect(response.statusCode).toBe(201);
 		}
 
+		it("rejects OIDC profile credential changes server-side even with valid legacy local credentials", async () => {
+			await registerRecoveryUser("oidclegacy", "legacy@example.com");
+			await testClient.execute(
+				"UPDATE users SET auth_provider = 'oidc', verified_oidc_email = 'verified@example.com', oidc_picture_url = 'https://images.example.test/avatar.png'"
+			);
+			const user = (await testClient.execute("SELECT * FROM users")).rows[0];
+			const accessToken = await app.jwt.sign({ sub: Number(user.id), username: "oidclegacy", credentialVersion: 0 });
+			for (const payload of [
+				{ email: "changed@example.com" },
+				{ currentPassword: "TestPassword123", email: "verified@example.com" },
+				{ currentPassword: "TestPassword123", newPassword: "NewPassword456" },
+			]) {
+				const response = await app.inject({
+					method: "PUT",
+					url: "/auth/me",
+					cookies: { access_token: accessToken },
+					payload,
+				});
+				expect(response.statusCode).toBe(400);
+				expect(response.json().code).toBe("SSO_ACCOUNT");
+			}
+			expect((await testClient.execute("SELECT * FROM users")).rows).toEqual([user]);
+			const profile = await app.inject({ method: "GET", url: "/auth/me", cookies: { access_token: accessToken } });
+			expect(profile.json()).toMatchObject({
+				authProvider: "oidc",
+				email: "verified@example.com",
+				oidcPictureUrl: "https://images.example.test/avatar.png",
+			});
+		});
+
 		it("sends a branded reset email with HTML and plaintext content", async () => {
 			await registerRecoveryUser("resetemail", "reset@example.com");
 
@@ -817,6 +847,29 @@ describe("Auth Routes (AUTH_ENABLED=true)", () => {
 			} finally {
 				await rateLimitedApp.close();
 			}
+		});
+
+		it("rejects a previously issued local reset token after the account becomes provider-managed", async () => {
+			await registerRecoveryUser("providerreset", "provider@example.com");
+			await app.inject({
+				method: "POST",
+				url: "/auth/forgot-password",
+				payload: { emailOrUsername: "providerreset" },
+			});
+			const token = getResetTokenFromEmail();
+			await testClient.execute("UPDATE users SET auth_provider = 'oidc'");
+			const before = await testClient.execute("SELECT password_hash, credential_version FROM users");
+			const reset = await app.inject({
+				method: "POST",
+				url: "/auth/reset-password",
+				payload: { token, newPassword: "NewPassword456" },
+			});
+			expect(reset.statusCode).toBe(400);
+			expect(reset.json().code).toBe("INVALID_RESET_TOKEN");
+			expect((await testClient.execute("SELECT password_hash, credential_version FROM users")).rows).toEqual(
+				before.rows
+			);
+			expect((await testClient.execute("SELECT used_at FROM password_reset_tokens")).rows[0].used_at).toBeNull();
 		});
 
 		it("rejects an expired reset token without changing the password", async () => {

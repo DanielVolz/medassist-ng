@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `verified_oidc_email` text(255) DEFAULT '' NOT NULL;

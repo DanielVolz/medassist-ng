@@ -3,6 +3,7 @@ import { db } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { normalizeDateTime } from "../utils/date-time.js";
 import { removeImageFiles } from "../utils/image-upload.js";
+import { sanitizeOidcPictureUrl } from "../utils/oidc-picture.js";
 import { hashPassword, performDummyCredentialWork, verifyPassword } from "./auth-service.js";
 
 type LoginFailureReason = "missing_user" | "wrong_password" | "inactive_account" | "sso_only_account";
@@ -48,7 +49,7 @@ export async function authenticateLocalCredentials(username: string, password: s
 		await performDummyCredentialWork();
 		return { ok: false, reason: "inactive_account", userId: user.id };
 	}
-	if (!user.passwordHash) {
+	if ((user.authProvider ?? "local") !== "local" || !user.passwordHash) {
 		await performDummyCredentialWork();
 		return { ok: false, reason: "sso_only_account", userId: user.id };
 	}
@@ -73,12 +74,18 @@ export async function getAccountProfile(userId: number) {
 	if (!user) return null;
 	const createdAt = normalizeDateTime(user.createdAt) ?? normalizeDateTime(user.updatedAt) ?? new Date(0).toISOString();
 	const lastLoginAt = normalizeDateTime(user.lastLoginAt);
+	const authProvider = user.authProvider ?? "local";
+	const verifiedOidcEmail = user.verifiedOidcEmail ?? "";
+	const emailFields: { email?: string | null } = {};
+	if (authProvider === "oidc" && verifiedOidcEmail) emailFields.email = verifiedOidcEmail;
+	else if (authProvider === "local" && user.passwordHash) emailFields.email = user.email;
 	return {
 		id: user.id,
 		username: user.username,
 		avatarUrl: user.avatarUrl,
-		authProvider: user.authProvider ?? "local",
-		...(user.passwordHash ? { email: user.email } : {}),
+		oidcPictureUrl: sanitizeOidcPictureUrl(user.oidcPictureUrl ?? ""),
+		authProvider,
+		...emailFields,
 		createdAt,
 		lastLoginAt,
 	};
@@ -99,6 +106,12 @@ export async function prepareProfileUpdates(
 	const { currentPassword, email, newPassword } = input;
 	const [user] = await db.select().from(users).where(eq(users.id, userId));
 	if (!user) return { ok: false, error: "User not found" };
+	if (
+		(user.authProvider ?? "local") !== "local" &&
+		(email !== undefined || newPassword !== undefined || currentPassword !== undefined)
+	) {
+		return { ok: false, error: "Credentials are managed by the identity provider", code: "SSO_ACCOUNT" };
+	}
 	const updates: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
 	const emailChanged = email !== undefined && email !== user.email;
 	if (newPassword || emailChanged) {

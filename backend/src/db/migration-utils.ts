@@ -129,6 +129,8 @@ export async function runAlterMigrations(client: Client): Promise<{ success: boo
 		`ALTER TABLE share_tokens ADD COLUMN revoked_at integer`,
 		`ALTER TABLE intake_journal ADD COLUMN mood text NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN email text`,
+		`ALTER TABLE users ADD COLUMN verified_oidc_email text NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN oidc_picture_url text NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN credential_version integer NOT NULL DEFAULT 0`,
 	];
 

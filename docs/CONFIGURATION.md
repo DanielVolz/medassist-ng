@@ -184,6 +184,24 @@ API reference:
 | `OIDC_AUTO_CREATE_USERS` | `true` | Auto-create users on first SSO login |
 | `OIDC_PROVIDER_NAME` | `SSO` | Login button label |
 
+SSO profiles show the provider's email read-only only when `email_verified` is
+the boolean `true`. The address is refreshed at each SSO login and cleared when
+the provider no longer supplies a verified email. It is stored separately from
+local password-recovery addresses and never links accounts by matching email.
+SSO accounts cannot use, change, or reset local passwords, even if a legacy
+password hash exists. Notification recipient settings remain independent.
+
+The standard UserInfo `picture` claim is refreshed at each SSO login. Only valid
+HTTPS URLs without embedded credentials are accepted; missing or invalid values
+clear the provider fallback. A locally uploaded avatar always takes precedence.
+Without a local upload, the header and profile load the provider image directly
+in the browser (without a referrer); MedAssist never downloads it server-side.
+Unavailable images fall back to initials. Image loading may still disclose the
+browser's IP address to the image host. A successful login does not guarantee
+that the provider supplies `picture` or permits browser access to that image.
+The bundled frontend CSP permits HTTPS image sources; custom reverse-proxy CSP
+headers must also allow the provider's image host.
+
 ## Email (SMTP)
 
 | Variable | Default | Description |

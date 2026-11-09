@@ -55,7 +55,14 @@ export async function consumePasswordResetToken(token: string, passwordHash: str
 				and(
 					eq(passwordResetTokens.tokenHash, tokenHash),
 					gt(passwordResetTokens.expiresAt, now),
-					isNull(passwordResetTokens.usedAt)
+					isNull(passwordResetTokens.usedAt),
+					sql`EXISTS (
+						SELECT 1 FROM users
+						WHERE users.id = ${passwordResetTokens.userId}
+							AND users.auth_provider = 'local'
+							AND users.is_active = 1
+							AND users.password_hash IS NOT NULL
+					)`
 				)
 			)
 			.returning({ userId: passwordResetTokens.userId });

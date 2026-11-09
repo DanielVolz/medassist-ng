@@ -19,7 +19,7 @@ export async function requestLocalPasswordReset(
 		.where(
 			sql`lower(${users.username}) = lower(${emailOrUsername}) OR lower(${users.email}) = lower(${emailOrUsername})`
 		);
-	if (!user?.isActive || !user.passwordHash || !user.email) {
+	if (!user?.isActive || (user.authProvider ?? "local") !== "local" || !user.passwordHash || !user.email) {
 		await performDummyCredentialWork();
 		return null;
 	}

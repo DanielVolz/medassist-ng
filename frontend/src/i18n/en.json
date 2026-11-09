@@ -768,6 +768,8 @@
     "changePassword": "Change Password",
     "recoveryEmail": "Password Recovery",
     "recoveryEmailDescription": "Use this email address to reset your password.",
+    "oidcEmail": "Verified SSO email",
+    "oidcEmailDescription": "Managed and verified by your identity provider.",
     "recoveryEmailConfirmationDescription": "Confirm your current password to save a new recovery email.",
     "passwordChangeDescription": "Choose a new password and confirm it with your current password.",
     "currentPasswordRequired": "Enter your current password to continue.",

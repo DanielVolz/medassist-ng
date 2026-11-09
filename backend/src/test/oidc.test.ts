@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildTestApp, closeTestApp } from "./setup.js";
 
 type OidcMocks = {
+	values: ReturnType<typeof vi.fn>;
+	set: ReturnType<typeof vi.fn>;
 	discovery: ReturnType<typeof vi.fn>;
 	buildAuthorizationUrl: ReturnType<typeof vi.fn>;
 	authorizationCodeGrant: ReturnType<typeof vi.fn>;
@@ -18,7 +20,7 @@ type JwtPayloadWithExp = Record<string, unknown> & { exp?: number; sub?: number;
 type OidcAppOptions = {
 	selectResults?: unknown[][];
 	insertReturning?: unknown[];
-	userInfo?: Record<string, string>;
+	userInfo?: Record<string, unknown>;
 };
 
 function buildCookieHeader(cookies: Array<{ name: string; value: string }>): string {
@@ -107,7 +109,15 @@ async function buildOidcApp(envOverrides: Record<string, unknown>, options: Oidc
 
 	return {
 		...testContext,
-		mocks: { discovery, buildAuthorizationUrl, authorizationCodeGrant, fetchUserInfo, db: dbMock } as OidcMocks,
+		mocks: {
+			discovery,
+			buildAuthorizationUrl,
+			authorizationCodeGrant,
+			fetchUserInfo,
+			db: dbMock,
+			values,
+			set,
+		} as OidcMocks,
 	};
 }
 
@@ -116,6 +126,210 @@ afterEach(() => {
 });
 
 describe("OIDC routes", () => {
+	it.each([
+		["https://images.example.test/avatar.png#fragment", "https://images.example.test/avatar.png"],
+		[undefined, ""],
+		["javascript:alert(1)", ""],
+	])("persists only safe provider pictures on creation and refresh (%#)", async (picture, expected) => {
+		for (const existing of [false, true]) {
+			const context = await buildOidcApp(
+				{},
+				{
+					selectResults: existing
+						? [[{ id: 8, username: "sso-user", isActive: true, avatarUrl: "local.webp", oidcPictureUrl: "old" }]]
+						: [[], []],
+					userInfo: { sub: "oidc-subject-1", preferred_username: "sso-user", picture },
+				}
+			);
+			try {
+				const login = await context.app.inject({ method: "GET", url: "/auth/oidc/login" });
+				const callback = await context.app.inject({
+					method: "GET",
+					url: `/auth/oidc/callback?code=abc&state=${getLocationState(login.headers.location)}`,
+					headers: { cookie: buildCookieHeader(login.cookies) },
+				});
+				expect(callback.headers.location).toBe("http://localhost:5173/dashboard");
+				const saved = existing ? context.mocks.set.mock.calls[0][0] : context.mocks.values.mock.calls[0][0];
+				expect(saved.oidcPictureUrl).toBe(expected);
+				expect(saved).not.toHaveProperty("avatarUrl");
+			} finally {
+				await closeTestApp(context);
+			}
+		}
+	});
+
+	it.each([
+		[true, "verified@example.com", "verified@example.com"],
+		[false, "unverified@example.com", ""],
+		[undefined, "missing-verification@example.com", ""],
+		["true", "string-verification@example.com", ""],
+		[true, "invalid-email", ""],
+		[true, undefined, ""],
+	])("persists only a valid email with boolean verified provenance: %s %s", async (verified, email, expected) => {
+		const context = await buildOidcApp(
+			{},
+			{
+				selectResults: [[], []],
+				userInfo: { sub: "oidc-subject-1", preferred_username: "sso-user", email, email_verified: verified },
+			}
+		);
+		try {
+			const login = await context.app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const callback = await context.app.inject({
+				method: "GET",
+				url: `/auth/oidc/callback?code=abc&state=${getLocationState(login.headers.location)}`,
+				headers: { cookie: buildCookieHeader(login.cookies) },
+			});
+			expect(callback.headers.location).toBe("http://localhost:5173/dashboard");
+			const account = context.mocks.values.mock.calls[0][0];
+			expect(account).toMatchObject({ authProvider: "oidc", verifiedOidcEmail: expected, passwordHash: null });
+			expect(account).not.toHaveProperty("email");
+			// Identity resolution reads only subject and username, never matching email.
+			expect(context.mocks.db.select).toHaveBeenCalledTimes(2);
+		} finally {
+			await closeTestApp(context);
+		}
+	});
+
+	it.each([true, false])("refreshes or clears verified email on subsequent logins: %s", async (verified) => {
+		const context = await buildOidcApp(
+			{},
+			{
+				selectResults: [[{ id: 8, username: "sso-user", authProvider: "oidc", isActive: true }]],
+				userInfo: {
+					sub: "oidc-subject-1",
+					preferred_username: "sso-user",
+					email: "new@example.com",
+					email_verified: verified,
+				},
+			}
+		);
+		try {
+			const login = await context.app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const callback = await context.app.inject({
+				method: "GET",
+				url: `/auth/oidc/callback?code=abc&state=${getLocationState(login.headers.location)}`,
+				headers: { cookie: buildCookieHeader(login.cookies) },
+			});
+			expect(callback.headers.location).toBe("http://localhost:5173/dashboard");
+			expect(context.mocks.set).toHaveBeenCalledWith(
+				expect.objectContaining({
+					verifiedOidcEmail: verified ? "new@example.com" : "",
+				})
+			);
+			expect(context.mocks.db.select).toHaveBeenCalledTimes(1);
+		} finally {
+			await closeTestApp(context);
+		}
+	});
+
+	it.each([
+		[null, true],
+		[null, false],
+		["existing-password-hash", true],
+		["existing-password-hash", false],
+	])("accepts a subject-linked local account with passwordHash=%s and verified=%s", async (passwordHash, verified) => {
+		const context = await buildOidcApp(
+			{ OIDC_AUTO_CREATE_USERS: false },
+			{
+				selectResults: [
+					[
+						{
+							id: 8,
+							username: "linked-local-user",
+							oidcSubject: "oidc-subject-1",
+							authProvider: "local",
+							passwordHash,
+							email: "recovery@example.com",
+							verifiedOidcEmail: "old@example.com",
+							isActive: true,
+						},
+					],
+				],
+				userInfo: {
+					sub: "oidc-subject-1",
+					preferred_username: "different-provider-username",
+					email: "new@example.com",
+					email_verified: verified,
+				},
+			}
+		);
+		try {
+			const login = await context.app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const callback = await context.app.inject({
+				method: "GET",
+				url: `/auth/oidc/callback?code=abc&state=${getLocationState(login.headers.location)}`,
+				headers: { cookie: buildCookieHeader(login.cookies) },
+			});
+			expect(callback.headers.location).toBe("http://localhost:5173/dashboard");
+			const accessToken = callback.cookies.find((cookie) => cookie.name === "access_token");
+			expect(accessToken).toBeDefined();
+			expect(await context.app.jwt.verify(accessToken?.value ?? "")).toMatchObject({
+				sub: 8,
+				username: "linked-local-user",
+			});
+			expect(callback.cookies.some((cookie) => cookie.name === "refresh_token")).toBe(true);
+			// Only passwordless rows are promoted; never rewrite local credentials or recovery email.
+			expect(context.mocks.set.mock.calls[0][0]).toEqual({
+				verifiedOidcEmail: verified ? "new@example.com" : "",
+				oidcPictureUrl: "",
+				updatedAt: expect.any(Date),
+				...(passwordHash ? {} : { authProvider: "oidc" }),
+			});
+			expect(context.mocks.db.select).toHaveBeenCalledTimes(1);
+			expect(context.mocks.values).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({ userId: 8, tokenId: expect.any(String) })
+			);
+		} finally {
+			await closeTestApp(context);
+		}
+	});
+
+	it.each([
+		["local", null],
+		["local", "existing-password-hash"],
+		["oidc", null],
+	])("rejects disabled subject-linked accounts: %s %s", async (authProvider, passwordHash) => {
+		const context = await buildOidcApp(
+			{},
+			{
+				selectResults: [
+					[
+						{
+							id: 8,
+							username: "disabled-user",
+							oidcSubject: "oidc-subject-1",
+							authProvider,
+							passwordHash,
+							isActive: false,
+						},
+					],
+				],
+				userInfo: {
+					sub: "oidc-subject-1",
+					preferred_username: "disabled-user",
+					email: "new@example.com",
+					email_verified: true,
+				},
+			}
+		);
+		try {
+			const login = await context.app.inject({ method: "GET", url: "/auth/oidc/login" });
+			const callback = await context.app.inject({
+				method: "GET",
+				url: `/auth/oidc/callback?code=abc&state=${getLocationState(login.headers.location)}`,
+				headers: { cookie: buildCookieHeader(login.cookies) },
+			});
+			expect(callback.headers.location).toBe("http://localhost:5173");
+			expect(callback.cookies.some((cookie) => ["access_token", "refresh_token"].includes(cookie.name))).toBe(false);
+			expect(context.mocks.db.update).not.toHaveBeenCalled();
+			expect(context.mocks.db.insert).not.toHaveBeenCalled();
+			expect(context.mocks.db.select).toHaveBeenCalledTimes(1);
+		} finally {
+			await closeTestApp(context);
+		}
+	});
+
 	it("returns 400 on login and callback when oidc is disabled", async () => {
 		const testContext = await buildOidcApp({ OIDC_ENABLED: false });
 		try {

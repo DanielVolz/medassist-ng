@@ -2,10 +2,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import * as client from "openid-client";
+import { z } from "zod";
 import { db } from "../db/client.js";
 import { refreshTokens, users } from "../db/schema.js";
 import { env } from "../plugins/env.js";
 import { parseStringListEnv } from "../utils/env-parsing.js";
+import { sanitizeOidcPictureUrl } from "../utils/oidc-picture.js";
 import { applyOpenApiRouteStandards, genericErrorSchema } from "../utils/openapi-route-standards.js";
 
 // =============================================================================
@@ -217,7 +219,10 @@ export async function oidcRoutes(app: FastifyInstance) {
 				reply.clearCookie("oidc_state", { path: "/" });
 
 				// Find or create user
-				const user = await findOrCreateOIDCUser(username, oidcSubject, reply);
+				const email = z.string().email().max(255).safeParse(userInfo.email);
+				const verifiedOidcEmail = userInfo.email_verified === true && email.success ? email.data : "";
+				const oidcPictureUrl = sanitizeOidcPictureUrl(userInfo.picture);
+				const user = await findOrCreateOIDCUser(username, oidcSubject, verifiedOidcEmail, oidcPictureUrl);
 
 				if (!user) {
 					return reply.redirect(getFrontendUrl());
@@ -238,9 +243,7 @@ export async function oidcRoutes(app: FastifyInstance) {
 				});
 
 				// Set cookies (use app's centralized cookie options)
-				request.log.debug(
-					`[OIDC] Setting auth cookies for username=${user.username}, userId=${user.id}, NODE_ENV=${env.NODE_ENV}, secure=${app.config.cookieOptions.secure}`
-				);
+				request.log.debug("[OIDC] Setting auth cookies");
 				setAuthCookies(app, reply, accessToken, refreshToken);
 
 				// Redirect to frontend dashboard
@@ -261,12 +264,24 @@ export async function oidcRoutes(app: FastifyInstance) {
 async function findOrCreateOIDCUser(
 	username: string,
 	oidcSubject: string,
-	_reply: FastifyReply
+	verifiedOidcEmail: string,
+	oidcPictureUrl: string
 ): Promise<{ id: number; username: string } | null> {
 	// First, try to find user by OIDC subject (most reliable)
 	const [existingBySubject] = await db.select().from(users).where(eq(users.oidcSubject, oidcSubject));
 
 	if (existingBySubject) {
+		if (!existingBySubject.isActive) return null;
+		// The persisted subject already links this identity; preserve any existing local password login.
+		await db
+			.update(users)
+			.set({
+				verifiedOidcEmail,
+				oidcPictureUrl,
+				updatedAt: new Date(),
+				...(existingBySubject.passwordHash ? {} : { authProvider: "oidc" }),
+			})
+			.where(eq(users.id, existingBySubject.id));
 		return { id: existingBySubject.id, username: existingBySubject.username };
 	}
 
@@ -293,6 +308,8 @@ async function findOrCreateOIDCUser(
 			passwordHash: null,
 			authProvider: "oidc",
 			oidcSubject: oidcSubject,
+			verifiedOidcEmail,
+			oidcPictureUrl,
 			isActive: true,
 		})
 		.returning({ id: users.id, username: users.username });

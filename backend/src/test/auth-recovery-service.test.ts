@@ -80,6 +80,7 @@ describe("auth recovery orchestration", () => {
 		"missing",
 		"inactive",
 		"sso",
+		"sso-with-hash",
 		"no-email",
 	])("performs dummy work without recovery side effects for %s", async (kind) => {
 		if (kind !== "missing")
@@ -87,6 +88,7 @@ describe("auth recovery orchestration", () => {
 				isActive: kind !== "inactive",
 				passwordHash: kind === "sso" ? null : "present",
 				email: kind === "no-email" ? null : "recovery@example.com",
+				authProvider: kind.startsWith("sso") ? "oidc" : "local",
 			});
 		const dummy = vi.spyOn(passwords, "performDummyCredentialWork").mockResolvedValue(undefined);
 		expect(await requestLocalPasswordReset("recoveryuser")).toBeNull();

@@ -69,6 +69,22 @@ describe("local auth account service", () => {
 		expect(await testDb.select().from(refreshTokens)).toEqual([]);
 	});
 
+	it("does not link or reserve a local recovery identity by matching verified OIDC email", async () => {
+		const external = await createUser({
+			username: "external",
+			authProvider: "oidc",
+			email: null,
+			verifiedOidcEmail: registration.email,
+			passwordHash: null,
+		});
+		const result = await registerLocalAccount(registration);
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error("Expected independent local account");
+		expect(result.user.id).not.toBe(external.id);
+		expect(await testDb.select().from(users)).toHaveLength(2);
+		expect(await getAccountProfile(external.id)).toMatchObject({ authProvider: "oidc", email: registration.email });
+	});
+
 	it.each([
 		[
 			{ ...registration, username: "localuser", email: "different@example.com" },
@@ -151,9 +167,12 @@ describe("local auth account service", () => {
 		expect(unchanged.lastLoginAt).toBeNull();
 	});
 
-	it("preserves local password login for accounts with an OIDC provider and a password hash", async () => {
+	it("rejects local password login for OIDC accounts even with a legacy password hash", async () => {
 		const user = await createUser({ authProvider: "oidc" });
-		expect(await authenticateLocalCredentials(user.username, password)).toMatchObject({ ok: true });
+		expect(await authenticateLocalCredentials(user.username, password)).toMatchObject({
+			ok: false,
+			reason: "sso_only_account",
+		});
 	});
 
 	it("propagates registration persistence failures without creating an account", async () => {
@@ -168,20 +187,58 @@ describe("local auth account service", () => {
 		}
 	});
 
-	it("returns public profile dates and omits email for SSO-only accounts", async () => {
+	it("returns public profile dates and only verified provider email for OIDC accounts", async () => {
 		const user = await createUser({ createdAt: new Date("2026-01-01T12:00:00Z") });
 		expect(await getAccountProfile(user.id)).toEqual({
 			id: user.id,
 			username: user.username,
 			avatarUrl: "avatar.webp",
 			email: user.email,
+			oidcPictureUrl: "",
 			authProvider: "local",
 			createdAt: user.createdAt.toISOString(),
 			lastLoginAt: null,
 		});
-		await testDb.update(users).set({ passwordHash: null, authProvider: "oidc" }).where(eq(users.id, user.id));
+		await testDb.update(users).set({ authProvider: "oidc" }).where(eq(users.id, user.id));
 		expect(await getAccountProfile(user.id)).not.toHaveProperty("email");
+		await testDb.update(users).set({ verifiedOidcEmail: "verified@example.com" }).where(eq(users.id, user.id));
+		expect(await getAccountProfile(user.id)).toMatchObject({ authProvider: "oidc", email: "verified@example.com" });
 		expect(await getAccountProfile(-1)).toBeNull();
+	});
+
+	it("keeps local avatar storage separate and reveals the provider fallback after local deletion", async () => {
+		const picture = "https://images.example.test/avatar.png";
+		const user = await createUser({ authProvider: "oidc", oidcPictureUrl: picture });
+		const cleanup = vi.spyOn(imageUpload, "removeImageFiles").mockImplementation(() => {});
+		expect(await getAccountProfile(user.id)).toMatchObject({ avatarUrl: "avatar.webp", oidcPictureUrl: picture });
+		await replaceAccountAvatar(user.id, "/test/images", "replacement.webp");
+		expect(await getAccountProfile(user.id)).toMatchObject({ avatarUrl: "replacement.webp", oidcPictureUrl: picture });
+		await deleteAccountAvatar(user.id, "/test/images");
+		expect(await getAccountProfile(user.id)).toMatchObject({ avatarUrl: null, oidcPictureUrl: picture });
+		expect(await deleteAccountAvatar(user.id, "/test/images")).toBe(false);
+		expect(cleanup.mock.calls.map((call) => call[1])).toEqual(["avatar.webp", "replacement.webp"]);
+	});
+
+	it("does not expose unsafe persisted provider URLs", async () => {
+		const user = await createUser({ oidcPictureUrl: "javascript:alert(1)" });
+		expect(await getAccountProfile(user.id)).toMatchObject({ oidcPictureUrl: "" });
+	});
+
+	it.each([
+		{ email: "Local@example.com" },
+		{ email: "new@example.com", currentPassword: password },
+		{ newPassword: "NewPassword123", currentPassword: password },
+		{ currentPassword: password },
+	])("rejects provider-managed credential requests without relying on hash absence: %j", async (input) => {
+		const user = await createUser({ authProvider: "oidc", verifiedOidcEmail: "verified@example.com" });
+		expect(await prepareProfileUpdates(user.id, input)).toMatchObject({ ok: false, code: "SSO_ACCOUNT" });
+		const [unchanged] = await testDb.select().from(users);
+		expect(unchanged).toMatchObject({
+			email: user.email,
+			verifiedOidcEmail: "verified@example.com",
+			passwordHash,
+			credentialVersion: 7,
+		});
 	});
 
 	it("prepares password changes without writing credentials or revoking sessions", async () => {

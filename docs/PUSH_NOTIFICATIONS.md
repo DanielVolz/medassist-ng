@@ -1,6 +1,8 @@
 # Push Notifications
 
-MedAssist uses [Shoutrrr](https://containrrr.dev/shoutrrr/) for push notifications.
+MedAssist uses the maintained [nicholas-fedor/Shoutrrr](https://github.com/nicholas-fedor/shoutrrr) Go library (v0.23.0, commit `52a642bd19038c6f6f34766e3ac0205c87e80b35`) through a static stdin/stdout bridge inside the backend container. ntfy and ordinary plain HTTP delivery stay native, including actions and message IDs. Native push delivery validates and pins DNS answers (with the explicit private-target exception for ntfy), preserves the original hostname for TLS verification, rejects redirects, and enforces 10-second header/body timeouts with a 64 KiB response limit. Other HTTP providers use the library with a shared client that validates every DNS answer at connection time, pins the selected IP, verifies TLS, and rejects redirects. Private/internal targets are allowed only by the existing explicit native ntfy behavior. Non-HTTP bridge services (SMTP, MQTT, XMPP, logger) are not enabled; email stays native.
+
+Discord and Matrix rate-limit responses are handled by the library within the bridge's overall delivery deadline. Matrix retries retain the original transaction ID. The bridge does not add independent message retries.
 
 ## Recommendation
 
@@ -113,7 +115,12 @@ telegram://TOKEN@telegram?chats=CHAT_ID
 telegram://TOKEN@telegram?chats=@your_channel,-1001234567890
 ```
 
-For all supported services and options, see the [Shoutrrr documentation](https://containrrr.dev/shoutrrr/v0.8/services/overview/).
+For service URL formats and options, see the [maintained Shoutrrr fork documentation](https://github.com/nicholas-fedor/shoutrrr/tree/v0.23.0/docs/services). MedAssist enables only the HTTP providers supported by its bridge; non-HTTP services are not enabled.
+
+The production and Docker development images include the bridge. When running
+the backend directly on your host, build it and set `SHOUTRRR_BINARY_PATH` as
+described in [DEVELOPMENT.md](DEVELOPMENT.md). Without the binary,
+bridge-backed delivery fails explicitly; it does not fall back to the former custom clients.
 
 ## Troubleshooting
 

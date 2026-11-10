@@ -29,9 +29,16 @@ const { testClient, testDb, testDbPath, mockedEnv, nodemailerSendMail, fetchMock
 	};
 });
 
-const { requestMock, dispatcherCloseMock } = vi.hoisted(() => ({
+const { execFileMock, requestMock, dispatcherCloseMock, bridgeState } = vi.hoisted(() => ({
+	execFileMock: vi.fn(),
 	requestMock: vi.fn(),
 	dispatcherCloseMock: vi.fn(),
+	bridgeState: {
+		input: "",
+		result: { success: true } as { success: boolean; error?: string; status?: number },
+		error: null as Error | null,
+		stdout: null as string | null,
+	},
 }));
 
 vi.mock("../db/client.js", () => ({
@@ -67,6 +74,8 @@ vi.mock("undici", () => ({
 		close = dispatcherCloseMock;
 	},
 }));
+
+vi.mock("node:child_process", () => ({ execFile: execFileMock }));
 
 const { settingsRoutes, sendShoutrrrNotification, loadUserSettings, getAllUserSettings } = await import(
 	"../routes/settings.js"
@@ -164,11 +173,31 @@ describe("Real route coverage: settings/export/report", () => {
 	beforeEach(async () => {
 		vi.clearAllMocks();
 		vi.stubGlobal("fetch", fetchMock);
+		bridgeState.input = "";
+		bridgeState.result = { success: true };
+		bridgeState.error = null;
+		bridgeState.stdout = null;
 		requestMock.mockResolvedValue({
 			statusCode: 204,
-			body: { dump: vi.fn().mockResolvedValue(undefined), text: vi.fn().mockResolvedValue("") },
+			body: {
+				dump: vi.fn().mockResolvedValue(undefined),
+				text: vi.fn().mockResolvedValue(""),
+				json: vi.fn().mockResolvedValue({}),
+			},
 		});
 		dispatcherCloseMock.mockResolvedValue(undefined);
+		execFileMock.mockImplementation((...args: unknown[]) => {
+			const callback = args[3] as (error: Error | null, stdout: string, stderr: string) => void;
+			return {
+				stdin: {
+					on: vi.fn(),
+					end: (input: string) => {
+						bridgeState.input = input;
+						callback(bridgeState.error, bridgeState.stdout ?? JSON.stringify(bridgeState.result), "");
+					},
+				},
+			};
+		});
 		await clearTables();
 		await seedAnonymousUser();
 		delete process.env.SMTP_HOST;
@@ -466,6 +495,7 @@ describe("Real route coverage: settings/export/report", () => {
 	});
 
 	it("POST /settings/test-shoutrrr returns 500 when notification delivery fails", async () => {
+		bridgeState.result = { success: false, error: "unsupported_provider" };
 		const response = await app.inject({
 			method: "POST",
 			url: "/settings/test-shoutrrr",
@@ -473,7 +503,7 @@ describe("Real route coverage: settings/export/report", () => {
 		});
 
 		expect(response.statusCode).toBe(500);
-		expect(response.json().error).toMatch(/Only HTTP\/HTTPS protocols are allowed|Unsupported URL format/);
+		expect(response.json().error).toBe("Shoutrrr: unsupported_provider");
 	});
 
 	it("POST /settings/test-shoutrrr returns 200 for a valid ntfy target", async () => {
@@ -592,13 +622,16 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 	});
 
-	it("sendShoutrrrNotification uses JSON payload for webhook URLs", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
+	it("sendShoutrrrNotification maps webhook URLs through the bridge as Generic JSON", async () => {
 		const result = await sendShoutrrrNotification("https://hooks.slack.com/services/a/b/c", "Title", "Body");
 		expect(result.success).toBe(true);
-		const call = fetchMock.mock.calls[0];
-		expect(call[1].headers["Content-Type"]).toBe("application/json");
-		expect(JSON.parse(call[1].body)).toMatchObject({ title: "Title", message: "Body" });
+		const input = JSON.parse(bridgeState.input);
+		const target = new URL(input.url);
+		expect(target.protocol).toBe("generic+https:");
+		expect(target.hostname).toBe("hooks.slack.com");
+		expect(target.searchParams.get("template")).toBe("json");
+		expect(target.searchParams.get("$text")).toBe("Title\n\nBody");
+		expect(input).toMatchObject({ title: "Title", message: "Body" });
 	});
 
 	it("sendShoutrrrNotification returns HTTP response errors for ntfy-style endpoints", async () => {
@@ -609,29 +642,7 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(result).toEqual({ success: false, error: "HTTP 429: rate limited" });
 	});
 
-	it("sendShoutrrrNotification rejects invalid Discord webhook identifiers", async () => {
-		const result = await sendShoutrrrNotification("discord://bad-token@not-a-number", "Title", "Body");
-
-		expect(result).toEqual({ success: false, error: "Invalid Discord webhook ID" });
-	});
-
-	it("sendShoutrrrNotification validates Pushover URL credentials", async () => {
-		const result = await sendShoutrrrNotification("pushover://missing-token", "Title", "Body");
-
-		expect(result).toEqual({ success: false, error: "Invalid Pushover URL format" });
-	});
-
-	it("sendShoutrrrNotification requires Telegram chats and validates tokens", async () => {
-		let result = await sendShoutrrrNotification("telegram://123:abc@telegram", "Title", "Body");
-		expect(result).toEqual({ success: false, error: "Telegram URL requires chats parameter" });
-
-		result = await sendShoutrrrNotification("telegram://invalid@telegram?chats=123", "Title", "Body");
-		expect(result).toEqual({ success: false, error: "Invalid Telegram token format" });
-	});
-
-	it("sendShoutrrrNotification converts Gotify URLs and supports disabletls", async () => {
-		fetchMock.mockResolvedValue({ ok: true });
-
+	it("sendShoutrrrNotification converts Gotify URLs for the bridge", async () => {
 		const result = await sendShoutrrrNotification(
 			"gotify://push.example.com/basepath/token123?disabletls=yes&priority=8",
 			"Title",
@@ -639,14 +650,28 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		const [requestInit] = requestMock.mock.calls[0];
-		expect(requestInit.origin).toBe("http://push.example.com");
-		expect(requestInit.path).toBe("/basepath/message?token=token123");
-		expect(requestInit.body).toBe("Body\n\n(priority=8)");
-		expect(requestInit.headers).toMatchObject({ Tags: "pill" });
+		const input = JSON.parse(bridgeState.input);
+		expect(input.url).toBe("gotify://push.example.com/basepath/token123?disabletls=yes&priority=8");
+		expect(input.message).toBe("Body");
 	});
 
-	it("sendShoutrrrNotification resolves Generic properties case-insensitively", async () => {
+	it("sendShoutrrrNotification preserves Discord thread query parameters", async () => {
+		const result = await sendShoutrrrNotification(
+			"https://discord.com/api/webhooks/123456789012345678/fixture-token?thread_id=987654321&wait=true",
+			"Title",
+			"Body"
+		);
+
+		expect(result.success).toBe(true);
+		expect(JSON.parse(bridgeState.input).url).toBe(
+			"discord://fixture-token@123456789012345678?thread_id=987654321&wait=true"
+		);
+		const [, args, options] = execFileMock.mock.calls[0];
+		expect(args).toEqual([]);
+		expect(options).toMatchObject({ timeout: 15_000, maxBuffer: 4096, env: {} });
+	});
+
+	it("sendShoutrrrNotification canonicalizes validated Generic method and JSON template", async () => {
 		const result = await sendShoutrrrNotification(
 			"generic://notify.example.com/message?token=gtfya123&Method=post&ContentType=application%2Fvnd.api%2Bjson&DisableTLS=y&Template=JSON&Title=Configured&TitleKey=subject&MessageKey=content",
 			"Title",
@@ -654,49 +679,51 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		const [requestInit] = requestMock.mock.calls[0];
-		expect(requestInit).toMatchObject({
-			origin: "http://notify.example.com",
-			path: "/message?token=gtfya123",
-			method: "POST",
-			headers: { "Content-Type": "application/vnd.api+json", Accept: "application/vnd.api+json" },
-			body: JSON.stringify({ subject: "Configured", content: "Body" }),
-			headersTimeout: 10_000,
-			bodyTimeout: 10_000,
-		});
-		expect(dispatcherCloseMock).toHaveBeenCalledOnce();
+		const target = new URL(JSON.parse(bridgeState.input).url);
+		expect(target.protocol).toBe("generic:");
+		expect(target.searchParams.get("method")).toBe("POST");
+		expect(target.searchParams.get("template")).toBe("json");
+		expect(target.searchParams.get("contenttype")).toBe("application/vnd.api+json");
+		expect(target.searchParams.get("title")).toBe("Configured");
+		expect(target.searchParams.get("titlekey")).toBe("subject");
+		expect(target.searchParams.get("messagekey")).toBe("content");
+		const [, args, options] = execFileMock.mock.calls[0];
+		expect(args).toEqual([]);
+		expect(options).toMatchObject({ timeout: 15_000, maxBuffer: 4096, env: {} });
 	});
 
-	it("sendShoutrrrNotification reconstructs the reported lowercase Generic JSON target", async () => {
-		const result = await sendShoutrrrNotification(
-			"generic://notify.example.com/message?token=gtfya123&contenttype=application%2Fjson&template=json",
-			"Title",
-			"Body"
-		);
-
-		expect(result).toEqual({ success: true });
-		expect(requestMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				origin: "https://notify.example.com",
-				path: "/message?token=gtfya123",
-				method: "POST",
-				headers: { "Content-Type": "application/json", Accept: "application/json" },
-				body: JSON.stringify({ title: "Title", message: "Body" }),
-			})
-		);
-		expect(fetchMock).not.toHaveBeenCalled();
-	});
-
-	it("sendShoutrrrNotification reports Generic HTTP failures and closes its dispatcher", async () => {
-		requestMock.mockResolvedValueOnce({
-			statusCode: 502,
-			body: { dump: vi.fn(), text: vi.fn().mockResolvedValue("upstream unavailable") },
-		});
+	it("sendShoutrrrNotification maps bridge failures without exposing arbitrary output", async () => {
+		bridgeState.result = { success: false, error: "http_failed", status: 502 };
 
 		const result = await sendShoutrrrNotification("generic://notify.example.com/message", "Title", "Body");
 
-		expect(result).toEqual({ success: false, error: "HTTP 502: upstream unavailable" });
-		expect(dispatcherCloseMock).toHaveBeenCalledOnce();
+		expect(result).toEqual({ success: false, error: "Shoutrrr: http_failed (HTTP 502)" });
+	});
+
+	it("sendShoutrrrNotification handles subprocess errors and malformed bridge output", async () => {
+		const exitError = Object.assign(new Error("sensitive command output"), { code: "ENOENT" });
+		execFileMock.mockImplementationOnce((...args: unknown[]) => {
+			const callback = args[3] as (error: Error | null, stdout: string, stderr: string) => void;
+			return { stdin: { on: vi.fn(), end: () => callback(exitError, "", "secret") } };
+		});
+
+		expect(await sendShoutrrrNotification("telegram://123:abc@telegram?chats=1", "Title", "Body")).toEqual({
+			success: false,
+			error: expect.stringContaining("Shoutrrr bridge missing"),
+		});
+
+		bridgeState.stdout = "not-json";
+		expect(await sendShoutrrrNotification("telegram://123:abc@telegram?chats=1", "Title", "Body")).toEqual({
+			success: false,
+			error: "Shoutrrr: bridge_failed",
+		});
+
+		bridgeState.stdout = null;
+		bridgeState.result = { success: false, error: "untrusted diagnostic text" };
+		expect(await sendShoutrrrNotification("telegram://123:abc@telegram?chats=1", "Title", "Body")).toEqual({
+			success: false,
+			error: "Shoutrrr: bridge_failed",
+		});
 	});
 
 	it("sendShoutrrrNotification normalizes Generic headers and preserves forwarded query data", async () => {
@@ -707,20 +734,23 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		const [requestInit] = requestMock.mock.calls[0];
-		expect(requestInit.origin).toBe("https://notify.example.com");
-		expect(requestInit.path).toBe("/message?template=forwarded&__signature=abc&item=one&item=two");
-		expect(requestInit.headers).toEqual({
-			Authorization: "Bearer token",
-			"User-Agent": "MedAssist",
-			"Content-Type": "application/problem+json",
-			Accept: "text/plain",
-			"X-A-P-I-Key": "first",
-		});
-		expect(JSON.parse(requestInit.body)).toEqual({ title: "Title", message: "Body", context: "mobile" });
+		const input = JSON.parse(bridgeState.input);
+		const target = new URL(input.url);
+		expect(target.protocol).toBe("generic:");
+		expect(target.searchParams.get("__template")).toBe("forwarded");
+		expect(target.searchParams.get("__signature")).toBe("abc");
+		expect(target.searchParams.getAll("item")).toEqual(["one", "two"]);
+		expect(target.searchParams.get("template")).toBe("json");
+		expect(target.searchParams.get("$context")).toBe("mobile");
+		expect(target.searchParams.get("@Authorization")).toBe("Bearer token");
+		expect(target.searchParams.get("@User-Agent")).toBe("MedAssist");
+		expect(target.searchParams.get("@Content-Type")).toBe("application/problem+json");
+		expect(target.searchParams.get("@Accept")).toBe("text/plain");
+		expect(target.searchParams.get("@X-A-P-I-Key")).toBe("first");
+		expect(input.message).toBe("Body");
 	});
 
-	it("sendShoutrrrNotification rejects non-POST Generic methods before fetch", async () => {
+	it("sendShoutrrrNotification rejects non-POST Generic methods before bridge execution", async () => {
 		const result = await sendShoutrrrNotification(
 			"generic://notify.example.com/message?Method=DELETE",
 			"Title",
@@ -728,7 +758,7 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: false, error: "Generic notifications only support POST requests" });
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(execFileMock).not.toHaveBeenCalled();
 	});
 
 	it("sendShoutrrrNotification rejects Generic authority and framing headers", async () => {
@@ -741,7 +771,7 @@ describe("Real route coverage: settings/export/report", () => {
 
 			expect(result).toEqual({ success: false, error: expect.stringContaining("is not allowed") });
 		}
-		expect(requestMock).not.toHaveBeenCalled();
+		expect(execFileMock).not.toHaveBeenCalled();
 	});
 
 	it("sendShoutrrrNotification forwards requestmethod as an ordinary Generic query parameter", async () => {
@@ -752,15 +782,9 @@ describe("Real route coverage: settings/export/report", () => {
 		);
 
 		expect(result).toEqual({ success: true });
-		expect(requestMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				origin: "https://notify.example.com",
-				path: "/message?requestmethod=GET",
-				method: "POST",
-				headers: { "Content-Type": "application/json", Accept: "application/json" },
-				body: "Body",
-			})
-		);
+		const target = new URL(JSON.parse(bridgeState.input).url);
+		expect(target.searchParams.get("requestmethod")).toBe("GET");
+		expect(target.searchParams.get("method")).toBe("POST");
 	});
 
 	it("sendShoutrrrNotification rejects Generic userinfo without exposing credentials", async () => {
@@ -774,15 +798,15 @@ describe("Real route coverage: settings/export/report", () => {
 		expect(result.error).toBe("Generic URLs must not include username or password");
 		expect(result.error).not.toContain("admin");
 		expect(result.error).not.toContain("super-secret");
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(execFileMock).not.toHaveBeenCalled();
 	});
 
-	it("sendShoutrrrNotification blocks private Generic targets before fetch", async () => {
+	it("sendShoutrrrNotification blocks private Generic targets before bridge execution", async () => {
 		const result = await sendShoutrrrNotification("generic://127.0.0.1/message?template=json", "Title", "Body");
 
 		expect(result.success).toBe(false);
 		expect(result.error).toContain("not allowed");
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(execFileMock).not.toHaveBeenCalled();
 	});
 
 	it("loadUserSettings creates defaults for users without settings", async () => {

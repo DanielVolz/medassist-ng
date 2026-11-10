@@ -12,6 +12,20 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder
 # -----------------------------------------------------------------------------
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:fa3d596898d9f126af7c01d14ee7597bab3f39cccf392ef36b69fe77cd681f18 AS shoutrrr
+ARG TARGETOS
+ARG TARGETARCH
+WORKDIR /bridge
+COPY backend/tools/shoutrrr/go.mod backend/tools/shoutrrr/go.sum ./
+RUN go mod download
+COPY backend/tools/shoutrrr/*.go ./
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o /medassist-shoutrrr .
+
+FROM node:22-slim AS development
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=shoutrrr /medassist-shoutrrr /usr/local/bin/medassist-shoutrrr
+
 FROM node:22-slim AS builder
 
 WORKDIR /app
@@ -45,7 +59,7 @@ FROM node:22-slim AS runner
 WORKDIR /app
 
 # Install gosu for reliable privilege dropping
-RUN apt-get update && apt-get install -y --no-install-recommends gosu \
+RUN apt-get update && apt-get install -y --no-install-recommends gosu ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && gosu nobody true
 
@@ -53,6 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gosu \
 COPY --from=builder /app/backend/node_modules ./node_modules
 COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/backend/package.json ./
+COPY --from=shoutrrr /medassist-shoutrrr /usr/local/bin/medassist-shoutrrr
 COPY --from=builder /app/shared/package.json /shared/package.json
 COPY --from=builder /app/shared/dist /shared/dist
 

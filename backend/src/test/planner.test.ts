@@ -63,6 +63,11 @@ vi.mock("../services/reminder-scheduler.js", () => ({
 	updateUserReminderSentTime: mockUpdateUserReminderSentTime,
 }));
 
+vi.mock("../services/notifications/delivery.js", async (importOriginal) => {
+	const original = (await importOriginal()) as Record<string, unknown>;
+	return { ...original, sendPushNotification: mockSendShoutrrr };
+});
+
 // Mock sendShoutrrrNotification from settings
 vi.mock("../routes/settings.js", async (importOriginal) => {
 	const original = (await importOriginal()) as Record<string, unknown>;

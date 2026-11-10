@@ -80,6 +80,11 @@ Public notification action routes allow arbitrary browser origins without creden
 
 When docs are enabled while `AUTH_ENABLED=true`, `DOCS_AUTH_REQUIRED` defaults to `true`. If a deployment explicitly sets `DOCS_AUTH_REQUIRED=false`, only the documentation routes become public; protected API routes still require their normal cookie, Bearer JWT, or API-key authentication.
 
+Swagger UI's transitive `@fastify/static` follows its upstream `^10.1.0` range.
+The former `10.1.2` override was removed because it blocked the patched upstream
+chain: static `10.1.9+` uses glob 14, allowing glob `14.0.2+` and minimatch `11.0.1+`
+to address GHSA-3g3m-2fjr-6pw4 and GHSA-g3hv-75wg-m249 without cross-major overrides.
+
 ## CSRF Decision
 
 No additional CSRF token is required for the current browser contract because state-changing session requests rely on `SameSite=Lax`, credentialed CORS allowlists, JSON/fetch-based clients, server-side auth, and current-password checks for sensitive account changes.

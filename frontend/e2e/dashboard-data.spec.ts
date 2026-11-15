@@ -44,6 +44,7 @@ test.describe("Dashboard with medications", () => {
 				blistersPerPack: 3,
 				pillsPerBlister: 10,
 				looseTablets: 0,
+				expiryDate: "2099-12-30",
 				intakes: [{ usage: 1, every: 1, start: todayMorning, intakeRemindersEnabled: false }],
 			})
 		);
@@ -72,6 +73,39 @@ test.describe("Dashboard with medications", () => {
 		// Our medications should have rows
 		await expect(overviewTable.getByText(MED_1)).toBeVisible();
 		await expect(overviewTable.getByText(MED_2)).toBeVisible();
+	});
+
+	test("keeps mobile overview dates inside the medication card", async ({ page }) => {
+		for (const width of [320, 384, 390]) {
+			await page.setViewportSize({ width, height: 844 });
+			await navigateTo(page, "/dashboard");
+
+			const row = page.getByTestId("dashboard-overview-row").filter({ hasText: MED_1 });
+			const dates = row.locator('[data-column-key="datePair"] .date-pair-value');
+			await expect(dates).toHaveCount(2);
+			await expect(dates.nth(0)).not.toHaveText("-");
+			await expect(dates.nth(1)).not.toHaveText("-");
+
+			for (const date of await dates.all()) {
+				const geometry = await date.evaluate((element) => {
+					const entry = element.closest(".date-pair-entry");
+					if (!entry) throw new Error("Date entry not found");
+					const range = document.createRange();
+					range.selectNodeContents(element);
+					const bounds = entry.getBoundingClientRect();
+					return {
+						entryLeft: bounds.left,
+						entryRight: bounds.right,
+						lines: Array.from(range.getClientRects(), (rect) => ({ left: rect.left, right: rect.right })),
+					};
+				});
+				expect(geometry.lines.length).toBeGreaterThan(0);
+				for (const line of geometry.lines) {
+					expect(line.left).toBeGreaterThanOrEqual(geometry.entryLeft - 1);
+					expect(line.right).toBeLessThanOrEqual(geometry.entryRight + 1);
+				}
+			}
+		}
 	});
 
 	test("should show status chips in overview table", async ({ page }) => {

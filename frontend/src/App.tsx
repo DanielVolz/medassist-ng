@@ -7,6 +7,7 @@ import classes from "./App.module.css";
 import "./AppSurfaces.css";
 import { AppHeader } from "./components/AppHeader";
 import { AuthPage, AuthProvider, useAuth } from "./components/Auth";
+import { MobileBottomNavigation } from "./components/MobileBottomNavigation";
 import {
 	AppProvider,
 	FeedbackProvider,
@@ -904,6 +905,7 @@ function AppContent() {
 				aria-hidden="true"
 				className={`${classes.routeTransitionMask}${routeTransitionMaskActive ? ` ${classes.routeTransitionMaskActive}` : ""}`}
 			/>
+			<MobileBottomNavigation />
 		</Box>
 	);
 }

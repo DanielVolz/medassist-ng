@@ -1,7 +1,9 @@
 .stack {
+	--feedback-bottom: 1rem;
+
 	position: fixed;
 	right: 1rem;
-	bottom: 1rem;
+	bottom: max(var(--feedback-bottom), var(--mobile-bottom-nav-clearance, 0px));
 	display: flex;
 	flex-direction: column;
 	gap: 0.75rem;
@@ -67,9 +69,10 @@
 
 @media (max-width: 640px) {
 	.stack {
+		--feedback-bottom: 0.75rem;
+
 		right: 0.75rem;
 		left: 0.75rem;
-		bottom: 0.75rem;
 		width: auto;
 	}
 }

@@ -481,15 +481,38 @@ test.describe("Medication editor UI regressions", () => {
 	test.describe("mobile modal keyboard focus", () => {
 		test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
+		test("keeps the bottom navigation accessible after a save notification", async ({ page }) => {
+			await navigateToMedicationList(page);
+			await page.getByRole("button", { name: "New medication", exact: true }).click();
+			const editor = page.getByRole("dialog");
+			await editor.getByLabel("Commercial Name").fill("Mobile navigation save check");
+			await editor.getByRole("button", { name: "Save", exact: true }).click();
+
+			const notice = page.getByRole("status");
+			const navigation = page.getByTestId("mobile-main-nav");
+			await expect(notice).toContainText("Saved");
+			await expect(navigation).toBeVisible();
+			const noticeBounds = await notice.boundingBox();
+			const navigationBounds = await navigation.boundingBox();
+			expect(noticeBounds).not.toBeNull();
+			expect(navigationBounds).not.toBeNull();
+			expect(noticeBounds!.y + noticeBounds!.height).toBeLessThanOrEqual(navigationBounds!.y);
+			await navigation.getByRole("button", { name: "Dashboard", exact: true }).click();
+			await expect(page).toHaveURL(/\/dashboard/);
+		});
+
 		test("keeps Tab focus in the dialog and Escape restores the medication list", async ({ page }) => {
 			await setRealTheme(page, "light");
 			await navigateTo(page, "/dashboard");
-			const routeOpener = page.getByTestId("main-nav").getByRole("button", { name: "Medications", exact: true });
+			const routeOpener = page.getByTestId("mobile-main-nav").getByRole("button", { name: "Medications", exact: true });
 			await routeOpener.click();
 			await expect(page.getByRole("heading", { name: /^Medications$/i })).toBeVisible();
+			await expect(page.getByTestId("mobile-main-nav")).toBeVisible();
 			await page.getByRole("button", { name: "New medication", exact: true }).click();
 			const editor = page.getByRole("dialog");
 			await expect(editor).toBeVisible();
+			await expect(page.getByTestId("mobile-main-nav")).toBeHidden();
+			await expect(page.getByTestId("mobile-main-nav")).toHaveAttribute("aria-hidden", "true");
 			const focusable = editor.locator(
 				'button:visible:not([disabled]), input:visible:not([disabled]), textarea:visible:not([disabled]), select:visible:not([disabled]), [tabindex]:visible:not([tabindex="-1"])'
 			);
@@ -502,6 +525,8 @@ test.describe("Medication editor UI regressions", () => {
 			await expect(first).toBeFocused();
 			await page.keyboard.press("Escape");
 			await expect(editor).not.toBeVisible();
+			await expect(page.getByTestId("mobile-main-nav")).toBeVisible();
+			await expect(page.getByRole("button", { name: "New medication", exact: true })).toBeFocused();
 			await expect(page.getByRole("heading", { name: /^Medications$/i })).toBeVisible();
 		});
 	});

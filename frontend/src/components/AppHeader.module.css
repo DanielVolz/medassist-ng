@@ -197,14 +197,7 @@
 	}
 
 	.nav {
-		grid-column: 1 / -1;
-		grid-row: 2;
-		width: 100%;
-		overflow-x: auto;
-	}
-
-	.navButton {
-		flex: 1 0 auto;
+		display: none;
 	}
 
 	.title {
@@ -216,9 +209,5 @@
 	.logo {
 		width: 36px;
 		height: 36px;
-	}
-
-	.navButton {
-		padding-inline: 0.7rem;
 	}
 }

@@ -164,6 +164,15 @@
 	flex: 0 0 auto;
 }
 
+@media (max-width: 768px) {
+	.overviewSection :global(td[data-column-key="datePair"]) :global(.date-pair-value) {
+		min-width: 0;
+		max-width: 100%;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+}
+
 @media (min-width: 769px) {
 	.overviewSection :global(th),
 	.overviewSection :global(td) {

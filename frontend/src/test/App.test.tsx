@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
@@ -11,6 +11,7 @@ const appTranslations: Record<string, string> = {
 	"common.retry": "Retry",
 	"nav.dismissSwipeHint": "Dismiss navigation swipe hint",
 	"nav.mobileSwipeHint": "Swipe sideways to switch Dashboard, Medications, and Planner.",
+	"nav.primaryNavigation": "Primary navigation",
 };
 
 vi.mock("react-i18next", async () => {
@@ -382,6 +383,60 @@ describe("App", () => {
 		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
 	});
 
+	it("navigates through all four mobile destinations and tracks the active route", async () => {
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		const navigation = await screen.findByTestId("mobile-main-nav");
+		expect(navigation).toHaveAttribute("aria-label", "Primary navigation");
+		expect(navigation.querySelectorAll("button")).toHaveLength(4);
+		expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent("nav.dashboard");
+
+		fireEvent.click(screen.getByRole("button", { name: /nav\.medications/i }));
+		expect(await screen.findByText("medications-page")).toBeInTheDocument();
+		expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent("nav.medications");
+
+		fireEvent.click(screen.getByRole("button", { name: /nav\.planner/i }));
+		expect(await screen.findByText("planner-page")).toBeInTheDocument();
+		expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent("nav.planner");
+
+		fireEvent.click(screen.getByRole("button", { name: /nav\.settings/i }));
+		expect(await screen.findByText("settings-page")).toBeInTheDocument();
+		expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent("nav.settings");
+		expect(confirmNavigationMock).toHaveBeenCalledTimes(3);
+	});
+
+	it("keeps the current route when mobile navigation confirmation is denied", async () => {
+		confirmNavigationMock.mockResolvedValueOnce(false);
+
+		render(
+			<MemoryRouter initialEntries={["/dashboard"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		fireEvent.click(await screen.findByRole("button", { name: /nav\.medications/i }));
+		expect(await screen.findByText("dashboard-page")).toBeInTheDocument();
+		expect(screen.queryByText("medications-page")).not.toBeInTheDocument();
+		expect(screen.getByTestId("mobile-main-nav").querySelector('[aria-current="page"]')).toHaveTextContent(
+			"nav.dashboard"
+		);
+	});
+
+	it("does not mark a mobile destination active on unrelated routes", async () => {
+		render(
+			<MemoryRouter initialEntries={["/schedule"]}>
+				<App />
+			</MemoryRouter>
+		);
+
+		expect(await screen.findByText("schedule-page")).toBeInTheDocument();
+		expect(screen.getByTestId("mobile-main-nav").querySelector('[aria-current="page"]')).toBeNull();
+	});
+
 	it("shows and dismisses the mobile main route swipe hint", async () => {
 		render(
 			<MemoryRouter initialEntries={["/dashboard"]}>
@@ -484,7 +539,7 @@ describe("App", () => {
 	// covered in AppContext.test.tsx ("closes an AppContext modal when browser
 	// back pops the modal history entry").
 
-	it("adds modal-open class when modal state is active", () => {
+	it("hides mobile navigation from assistive technology while a modal is open", async () => {
 		shareContextMock.showShareDialog = true;
 
 		render(
@@ -495,6 +550,10 @@ describe("App", () => {
 
 		expect(document.documentElement.classList.contains("modal-open")).toBe(true);
 		expect(document.body.classList.contains("modal-open")).toBe(true);
+		await waitFor(() => {
+			expect(screen.getByTestId("mobile-main-nav")).toHaveAttribute("aria-hidden", "true");
+			expect(screen.getByTestId("mobile-main-nav")).toHaveAttribute("hidden");
+		});
 	});
 
 	it("opens profile and about modals from header actions", async () => {

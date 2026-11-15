@@ -45,7 +45,7 @@
 
 	max-width: 1200px;
 	margin: 0 auto;
-	padding: 0 var(--page-pad-x) 1.5rem;
+	padding: 0 var(--page-pad-x) var(--mobile-bottom-nav-clearance, 1.5rem);
 }
 
 /* WCAG 2.1 Level A (2.4.1 Bypass Blocks): Skip link */

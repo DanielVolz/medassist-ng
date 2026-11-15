@@ -219,6 +219,8 @@ test.describe("Mobile modal browser back", () => {
 
 			try {
 				const { editor } = await openMedicationDetailForEdit(page, medication.id, medicationName);
+				const mobileNavigation = page.getByTestId("mobile-main-nav");
+				await expect(mobileNavigation).toBeHidden();
 				const form = editor.locator("form.form-grid");
 				const nameInput = form.getByRole("textbox", { name: /^(Commercial Name|Name|form\.name)/i });
 				await expect(nameInput).toHaveValue(medicationName);
@@ -248,6 +250,7 @@ test.describe("Mobile modal browser back", () => {
 					.filter({ hasText: /Unsaved Changes|You have unsaved changes|Unsaved changes/i })
 					.last();
 				await expect(unsavedConfirm).toBeVisible();
+				await expect(mobileNavigation).toBeHidden();
 				await unsavedConfirm.getByRole("button", { name: /Leave|common\.leave/i }).click();
 
 				const detail = page
@@ -261,6 +264,7 @@ test.describe("Mobile modal browser back", () => {
 				await page.goBack({ waitUntil: "commit" });
 				await expect(detail).toBeHidden();
 				expect(await page.evaluate(() => window.history.state?.modal)).not.toBe("medDetail");
+				await expect(mobileNavigation).toBeVisible();
 			} finally {
 				await deleteAllMedicationsViaAPI();
 			}

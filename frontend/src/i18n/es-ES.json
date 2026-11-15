@@ -3,6 +3,7 @@
     "dashboard": "Panel",
     "medications": "Medicamentos",
     "planner": "Planificador",
+    "primaryNavigation": "Navegación principal",
     "settings": "Ajustes",
     "schedule": "Calendario",
     "mobileSwipeHint": "Desliza hacia los lados para cambiar entre Panel, Medicamentos y Planificador.",

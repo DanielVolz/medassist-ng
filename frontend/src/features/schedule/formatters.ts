@@ -1,15 +1,15 @@
+import type { TranslationFunction } from "../../i18n/types";
 import type { IntakeUnit } from "../../types";
 import { isLiquidContainerPackageType, isTubePackageType } from "../../types";
 import { formatNumber } from "../../utils/formatters";
 import { convertLiquidUsageToMl, getLiquidCountUnitLabel, type UnitLabelVariant } from "../../utils/intake-units";
 
-type Translate = (key: string, options?: Record<string, unknown>) => string;
 type MedicationLike = { packageType?: string | null; medicationForm?: string | null } | undefined;
 
 function formatLiquidUsageLabel(
 	usage: number,
 	unit: IntakeUnit | null | undefined,
-	t: Translate,
+	t: TranslationFunction,
 	variant: UnitLabelVariant = "full"
 ): string {
 	const normalizedUsage = Number(usage);
@@ -28,7 +28,7 @@ function formatLiquidUsageLabel(
 function getTubeUnitLabel(
 	med: MedicationLike,
 	value: number,
-	t: Translate,
+	t: TranslationFunction,
 	variant: UnitLabelVariant = "full"
 ): string {
 	if (isLiquidContainerPackageType(med?.packageType) || med?.medicationForm === "liquid") {
@@ -41,7 +41,7 @@ function getTubeUnitLabel(
 function getDiscreteUnitLabel(
 	med: MedicationLike,
 	value: number,
-	t: Translate,
+	t: TranslationFunction,
 	variant: UnitLabelVariant = "full"
 ): string {
 	if (med?.packageType === "inhaler") return value === 1 ? t("common.puff") : t("common.puffs");
@@ -56,7 +56,7 @@ function getDiscreteUnitLabel(
 export function formatScheduleDoseUsageLabel(
 	med: MedicationLike,
 	usage: number,
-	t: Translate,
+	t: TranslationFunction,
 	intakeUnit?: IntakeUnit | null,
 	options?: { variant?: UnitLabelVariant }
 ): string {
@@ -75,7 +75,7 @@ export function formatScheduleDoseUsageLabel(
 export function formatScheduleTotalUsageLabel(
 	med: MedicationLike,
 	total: number,
-	t: Translate,
+	t: TranslationFunction,
 	doses?: Array<{ usage: number; intakeUnit?: IntakeUnit | null }>,
 	fallbackIntakeUnit?: IntakeUnit | null
 ): string {

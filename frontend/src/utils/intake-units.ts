@@ -1,6 +1,6 @@
+import type { TranslationFunction } from "../i18n/types";
 import type { IntakeUnit } from "../types";
 
-type Translate = (key: string, options?: Record<string, unknown>) => string;
 export type UnitLabelVariant = "full" | "compact";
 
 export function convertLiquidUsageToMl(usage: number, unit: IntakeUnit | null | undefined): number {
@@ -12,7 +12,7 @@ export function convertLiquidUsageToMl(usage: number, unit: IntakeUnit | null | 
 export function getLiquidCountUnitLabel(
 	unit: IntakeUnit | null | undefined,
 	usage: number,
-	t: Translate,
+	t: TranslationFunction,
 	variant: UnitLabelVariant = "full"
 ): string {
 	if (unit === "tsp") {

@@ -9,8 +9,9 @@ import {
 } from "../../hooks/medicationFormModel";
 import { defaultForm } from "../../hooks/useMedicationForm";
 import { FIELD_LIMITS } from "../../types";
+import { asTranslationFunction } from "../utils/translation";
 
-const t = (key: string) => key;
+const t = asTranslationFunction((key: string) => key);
 
 describe("medicationFormModel", () => {
 	it("exposes the shared medication field limits", () => {

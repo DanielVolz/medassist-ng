@@ -53,7 +53,7 @@
     "@mantine/notifications": "^9.8.0",
     "@medassist/shared": "file:../shared",
     "dayjs": "^1.11.23",
-    "i18next": "^26.7.2",
+    "i18next": "^27.1.1",
     "i18next-browser-languagedetector": "^8.3.0",
     "lucide-react": "^1.72.0",
     "react": "^19.3.1",

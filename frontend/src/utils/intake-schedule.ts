@@ -1,3 +1,4 @@
+import type { TranslationFunction } from "../i18n/types";
 import type { Blister, Intake, ScheduleMode, WeekdayCode } from "../types";
 
 type MedicationScheduleSource = {
@@ -11,8 +12,6 @@ type IntakeScheduleLike = {
 	scheduleMode?: ScheduleMode | null;
 	weekdays?: ReadonlyArray<WeekdayCode> | null;
 };
-
-type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export const WEEKDAY_CODES: WeekdayCode[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
@@ -55,7 +54,7 @@ function getWeekdayCode(date: Date): WeekdayCode {
 	return WEEKDAY_CODES[(date.getDay() + 6) % 7];
 }
 
-export function getWeekdayLabel(day: WeekdayCode, t: Translate, format: "short" | "long" = "short"): string {
+export function getWeekdayLabel(day: WeekdayCode, t: TranslationFunction, format: "short" | "long" = "short"): string {
 	return t(WEEKDAY_LABELS[day][format]);
 }
 
@@ -127,7 +126,7 @@ export function getIntakeDailyRate(schedule: IntakeScheduleLike): number {
 	return 1 / getNormalizedInterval(schedule);
 }
 
-export function getIntakeFrequencyText(schedule: IntakeScheduleLike, t: Translate): string {
+export function getIntakeFrequencyText(schedule: IntakeScheduleLike, t: TranslationFunction): string {
 	if (getIntakeScheduleMode(schedule) === "weekdays") {
 		return normalizeWeekdays(schedule.weekdays)
 			.map((day) => getWeekdayLabel(day, t, "short"))

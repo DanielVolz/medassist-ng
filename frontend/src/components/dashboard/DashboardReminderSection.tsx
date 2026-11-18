@@ -1,4 +1,5 @@
 import { Text } from "@mantine/core";
+import type { TranslationFunction } from "../../i18n/types";
 import { type Coverage, getMedDisplayName, type Medication, type StockThresholds } from "../../types";
 import { SectionCard } from "../../ui/components/SectionCard";
 import { AppButton } from "../../ui/primitives/AppButton";
@@ -22,7 +23,7 @@ type PrescriptionLowMed = {
 };
 
 type DashboardReminderSectionProps = {
-	t: (key: string, options?: Record<string, unknown>) => string;
+	t: TranslationFunction;
 	remindersLoading: boolean;
 	anyRemindersEnabled: boolean;
 	stockRemindersEnabled: boolean;

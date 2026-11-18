@@ -1,4 +1,5 @@
 import { Text } from "@mantine/core";
+import type { TranslationFunction } from "../../i18n/types";
 import type { Coverage, Medication, StockThresholds } from "../../types";
 import { getMedDisplayName } from "../../types";
 import { SectionCard } from "../../ui/components/SectionCard";
@@ -6,7 +7,7 @@ import { AppTextAction } from "../../ui/primitives/AppTextAction";
 import { getStockStatus } from "../../utils/schedule";
 
 type DashboardStatusSectionProps = {
-	t: (key: string, options?: Record<string, unknown>) => string;
+	t: TranslationFunction;
 	show: boolean;
 	meds: Medication[];
 	coverage: { all: Coverage[] };

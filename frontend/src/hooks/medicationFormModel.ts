@@ -1,3 +1,4 @@
+import type { TranslationFunction } from "../i18n/types";
 import type { FieldErrors, FormIntake, FormState } from "../types";
 import {
 	allowsPillFormSelection,
@@ -11,8 +12,6 @@ import { combineDateAndTime, toMonthEndDateValue } from "../utils/formatters";
 import { getIntakeScheduleMode, hasSelectedWeekdays } from "../utils/intake-schedule";
 
 export const MEDICATION_FORM_FIELD_LIMITS = FIELD_LIMITS;
-
-type TranslationFunction = (key: string, options?: Record<string, unknown>) => string;
 
 export function validateMedicationFormField(
 	field: keyof FieldErrors,

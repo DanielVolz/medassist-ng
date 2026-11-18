@@ -10,6 +10,7 @@ import {
 	getReminderStatusData,
 	userStorageKey,
 } from "../../pages/dashboard-helpers";
+import { asTranslationFunction } from "../utils/translation";
 
 const feedbackMock = vi.hoisted(() => ({ showFeedback: vi.fn() }));
 const authFetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
@@ -232,7 +233,7 @@ describe("DashboardPage helper functions", () => {
 	});
 
 	it("formats blister and open blister labels", () => {
-		const t = (key: string) => key;
+		const t = asTranslationFunction((key: string) => key);
 		expect(formatFullBlisters(1, t)).toBe("1 common.blister");
 		expect(formatFullBlisters(3, t)).toBe("3 common.blisters");
 		expect(formatOpenBlisterAndLoose(0, 0, 10, t)).toBe("-");
@@ -264,7 +265,7 @@ describe("DashboardPage helper functions", () => {
 	});
 
 	it("builds reminder status data for critical and history rows", () => {
-		const t = (key: string) => key;
+		const t = asTranslationFunction((key: string) => key);
 		const result = getReminderStatusData(
 			7,
 			30,
@@ -293,7 +294,7 @@ describe("DashboardPage helper functions", () => {
 	});
 
 	it("builds warning and success reminder statuses", () => {
-		const t = (key: string) => key;
+		const t = asTranslationFunction((key: string) => key);
 
 		const warning = getReminderStatusData(
 			7,

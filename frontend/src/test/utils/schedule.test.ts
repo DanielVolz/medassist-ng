@@ -11,6 +11,7 @@ import {
 	isDoseDismissed,
 	parseLocalDateTime,
 } from "../../utils/schedule";
+import { asTranslationFunction } from "./translation";
 
 describe("parseLocalDateTime", () => {
 	it("treats Z-suffixed intake timestamps as local wall-clock times", () => {
@@ -1392,11 +1393,11 @@ describe("getNextReminderForMed", () => {
 		vi.useRealTimers();
 	});
 
-	const mockT = (key: string, options?: Record<string, unknown>) => {
+	const mockT = asTranslationFunction((key: string, options?: Record<string, unknown>) => {
 		if (typeof options?.count === "number") return `${key} (${options.count})`;
 		if (typeof options?.days === "number") return `${key} (${options.days})`;
 		return key;
-	};
+	});
 
 	it("shows empty stock warning first", () => {
 		const emptyMed: Coverage = {

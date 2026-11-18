@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { parseLocalDateTime } from "@medassist/shared";
+import type { TranslationFunction } from "../i18n/types";
 import type { Coverage, Intake, Medication, PackageType, ScheduleEvent, StockStatus, StockThresholds } from "../types";
 import { getMedDisplayName, getMedTotal, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { formatDisplayDate, formatDisplayDateTime } from "./formatters";
@@ -341,7 +342,7 @@ export function getReminderStatusText(
 	lastSent: string | null,
 	lastType: "stock" | "intake" | null,
 	lastChannel: "email" | "push" | "both" | null,
-	t: (key: string, options?: Record<string, unknown>) => string,
+	t: TranslationFunction,
 	locale: string
 ): { lines: Array<{ text: string; className?: string; strong?: boolean }> } {
 	const emptyMeds = allCoverage.filter((c) => c.medsLeft <= 0);

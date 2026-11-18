@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useModalHistory } from "../hooks/useModalHistory";
+import type { TranslationFunction } from "../i18n/types";
 import type { AsNeededQuantityUnit, Medication } from "../types";
 import {
 	getMedDisplayName,
@@ -448,43 +449,41 @@ function ReportModal({ isOpen, onClose, onExitTransitionEnd, medications }: Repo
 
 // ─── Report generation helpers ───
 
-type TFn = (key: string, opts?: Record<string, unknown>) => string;
-
-function getAmountBasedUnitText(med: Medication, value: number, t: TFn): string {
+function getAmountBasedUnitText(med: Medication, value: number, t: TranslationFunction): string {
 	if (isLiquidContainerPackageType(med.packageType) || med.medicationForm === "liquid") {
 		return t("form.packageAmountUnitMl");
 	}
 	return t("form.blisters.applications", { count: Math.abs(value) });
 }
 
-function getDiscreteUnitText(med: Medication, value: number, t: TFn): string {
+function getDiscreteUnitText(med: Medication, value: number, t: TranslationFunction): string {
 	if (med.packageType === "inhaler") return value === 1 ? t("common.puff") : t("common.puffs");
 	if (med.packageType === "injection") return value === 1 ? t("common.injection") : t("common.injections");
 	return value === 1 ? t("common.pill") : t("common.pills");
 }
 
-function getUsageText(med: Medication, usage: number, t: TFn): string {
+function getUsageText(med: Medication, usage: number, t: TranslationFunction): string {
 	if (isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)) {
 		return `${usage} ${getAmountBasedUnitText(med, usage, t)}`;
 	}
 	return `${usage} ${getDiscreteUnitText(med, usage, t)}`;
 }
 
-function getTotalCapacityLabel(med: Medication, t: TFn): string {
+function getTotalCapacityLabel(med: Medication, t: TranslationFunction): string {
 	if (isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)) {
 		return t("form.totalAmountLabel", { unit: getAmountBasedUnitText(med, getStockDisplayCapacity(med), t) });
 	}
 	return t("report.docTotalCapacity");
 }
 
-function getCurrentStockText(med: Medication, t: TFn): string {
+function getCurrentStockText(med: Medication, t: TranslationFunction): string {
 	if (isTubePackageType(med.packageType) || isLiquidContainerPackageType(med.packageType)) {
 		return `${getMedTotal(med)} ${getAmountBasedUnitText(med, getMedTotal(med), t)}`;
 	}
 	return `${getMedTotal(med)} ${getDiscreteUnitText(med, getMedTotal(med), t)}`;
 }
 
-function getReportPackageTypeLabel(med: Medication, t: TFn): string {
+function getReportPackageTypeLabel(med: Medication, t: TranslationFunction): string {
 	if (isTubePackageType(med.packageType)) return t("report.docTube");
 	if (isLiquidContainerPackageType(med.packageType)) return t("form.packageTypeLiquidContainer");
 	if (med.packageType === "inhaler") return t("form.packageTypeInhaler");
@@ -493,14 +492,17 @@ function getReportPackageTypeLabel(med: Medication, t: TFn): string {
 	return t("report.docBlister");
 }
 
-function getMoodSummaryItems(summary: Partial<Record<IntakeMood, number>> | undefined, t: TFn): string[] {
+function getMoodSummaryItems(
+	summary: Partial<Record<IntakeMood, number>> | undefined,
+	t: TranslationFunction
+): string[] {
 	return INTAKE_MOODS.map((mood) => {
 		const count = summary?.[mood] ?? 0;
 		return count > 0 ? `${getIntakeMoodDisplay(mood, t)}: ${count}` : null;
 	}).filter((item): item is string => item !== null);
 }
 
-function formatJournalReportEntry(entry: ReportJournalEntry, t: TFn): string {
+function formatJournalReportEntry(entry: ReportJournalEntry, t: TranslationFunction): string {
 	const mood = entry.mood ? getIntakeMoodDisplay(entry.mood, t) : t("report.docJournalNoMood");
 	const status = entry.dismissed ? t("report.docJournalStatusSkipped") : t("report.docJournalStatusTaken");
 	const parts = [
@@ -520,13 +522,13 @@ function formatJournalReportEntry(entry: ReportJournalEntry, t: TFn): string {
 
 const AS_NEEDED_REPORT_UNITS: AsNeededQuantityUnit[] = ["pills", "ml", "puffs", "injections", "application"];
 
-function formatAsNeededQuantity(value: number, unit: AsNeededQuantityUnit, t: TFn): string {
+function formatAsNeededQuantity(value: number, unit: AsNeededQuantityUnit, t: TranslationFunction): string {
 	return `${value.toLocaleString(getNumericLocale(), { maximumFractionDigits: 3 })} ${t(`asNeeded.units.${unit}`, { count: value })}`;
 }
 
 function getAsNeededQuantitySummary(
 	quantities: Partial<Record<AsNeededQuantityUnit, number>> | undefined,
-	t: TFn
+	t: TranslationFunction
 ): string[] {
 	return AS_NEEDED_REPORT_UNITS.flatMap((unit) => {
 		const quantity = quantities?.[unit] ?? 0;
@@ -534,7 +536,7 @@ function getAsNeededQuantitySummary(
 	});
 }
 
-function formatAsNeededReportEntry(entry: ReportAsNeededIntake, t: TFn): string {
+function formatAsNeededReportEntry(entry: ReportAsNeededIntake, t: TranslationFunction): string {
 	const parts = [
 		`${t("report.docOccurredAt")}: ${formatJournalDisplayDateTime(entry.occurredAt) ?? "-"}`,
 		`${t("report.docRecordedAt")}: ${formatJournalDisplayDateTime(entry.recordedAt) ?? "-"}`,
@@ -566,7 +568,7 @@ function generateTextReport(
 	meds: Medication[],
 	reportData: ReportData,
 	fmt: "txt" | "md",
-	t: TFn,
+	t: TranslationFunction,
 	personFilter: string[] | null,
 	dateRange: { startDate: string; endDate: string }
 ): string {
@@ -772,7 +774,7 @@ async function fetchMedImages(meds: Medication[], authFetch: typeof fetch): Prom
 function openPrintView(
 	meds: Medication[],
 	reportData: ReportData,
-	t: TFn,
+	t: TranslationFunction,
 	imageMap: ImageMap,
 	personFilter: string[] | null,
 	dateRange: { startDate: string; endDate: string }
@@ -793,7 +795,7 @@ function escHtml(s: string): string {
 function buildPrintHtml(
 	meds: Medication[],
 	reportData: ReportData,
-	t: TFn,
+	t: TranslationFunction,
 	imageMap: ImageMap,
 	personFilter: string[] | null,
 	dateRange: { startDate: string; endDate: string }

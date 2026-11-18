@@ -2,6 +2,7 @@
 // ICS Calendar Generation
 // =============================================================================
 
+import type { TranslationFunction } from "../i18n/types";
 import type { Medication } from "../types";
 import { getMedDisplayName } from "../types";
 import {
@@ -39,11 +40,11 @@ export function generateICS(med: Medication): void {
 			const frequencyText =
 				getIntakeScheduleMode(intake) === "weekdays"
 					? weekdayCodes.map(getWeekdayIcsCode).join(", ")
-					: getIntakeFrequencyText(intake, (key, options) => {
+					: getIntakeFrequencyText(intake, ((key: string, options?: Record<string, unknown>) => {
 							if (key === "common.daily") return "daily";
 							if (key === "common.everyNDays") return `every ${options?.count ?? interval} days`;
 							return key;
-						});
+						}) as unknown as TranslationFunction);
 			const rrule =
 				getIntakeScheduleMode(intake) === "weekdays" && weekdayCodes.length > 0
 					? `RRULE:FREQ=WEEKLY;BYDAY=${weekdayCodes.map(getWeekdayIcsCode).join(",")}`

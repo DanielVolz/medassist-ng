@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TranslationFunction } from "../i18n/types";
 import type {
 	MedicationEnrichmentEnrichResponse,
 	MedicationEnrichmentPackageOption,
@@ -20,8 +21,6 @@ const PACKAGE_CONTENT_UNIT_PATTERNS = [
 	{ pattern: /\bpills?\b/i, key: "pill" },
 ] as const;
 const INITIAL_VISIBLE_STRENGTH_OPTIONS = 12;
-
-type TranslateFunction = (key: string, options?: Record<string, unknown>) => string;
 
 export interface MedicationEnrichmentViewModel {
 	query: string;
@@ -105,12 +104,12 @@ function detectPackageContentUnitKey(value: string): string {
 	return "tablet";
 }
 
-function formatSolidPackageCount(count: number, sourceText: string, t: TranslateFunction): string {
+function formatSolidPackageCount(count: number, sourceText: string, t: TranslationFunction): string {
 	const unitKey = detectPackageContentUnitKey(sourceText);
 	return `${count} ${t(`form.enrichment.packageUnits.${unitKey}`, { count })}`;
 }
 
-function formatPackageContainerCount(option: MedicationEnrichmentPackageOption, t: TranslateFunction): string {
+function formatPackageContainerCount(option: MedicationEnrichmentPackageOption, t: TranslationFunction): string {
 	return t(getPackageContainerTranslationKey(option.packageType), { count: Math.max(option.packCount, 1) });
 }
 
@@ -149,7 +148,7 @@ function dedupePackageOptions(options: MedicationEnrichmentPackageOption[]): Med
 
 function formatPackageOptionDisplayText(
 	value: MedicationEnrichmentPackageOption | string,
-	t: TranslateFunction
+	t: TranslationFunction
 ): string {
 	const rawText = typeof value === "string" ? value : value.description || value.label;
 	const cleanedText = normalizePackageOptionDisplayText(rawText);

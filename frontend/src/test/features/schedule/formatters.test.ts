@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { formatScheduleDoseUsageLabel, formatScheduleTotalUsageLabel } from "../../../features/schedule/formatters";
+import { asTranslationFunction } from "../../utils/translation";
 
-const t = (key: string, options?: Record<string, unknown>): string => {
+const t = asTranslationFunction((key: string, options?: Record<string, unknown>): string => {
 	switch (key) {
 		case "form.packageAmountUnitMl":
 			return "ml";
@@ -30,7 +31,7 @@ const t = (key: string, options?: Record<string, unknown>): string => {
 		default:
 			return key;
 	}
-};
+});
 
 describe("schedule formatters", () => {
 	it("formats liquid dose labels in base and converted units", () => {

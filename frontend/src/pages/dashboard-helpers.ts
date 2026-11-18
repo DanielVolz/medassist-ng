@@ -1,3 +1,4 @@
+import type { TranslationFunction } from "../i18n/types";
 import type { Coverage, Medication, PackageType } from "../types";
 import { getMedTotal as getMedTotalFromTypes, isLiquidContainerPackageType, isTubePackageType } from "../types";
 import { formatDisplayDateTime } from "../utils/formatters";
@@ -66,7 +67,7 @@ export function getReminderStatusData(
 	lastStockReminderSent: string | null,
 	_lastStockReminderChannel: string | null,
 	lastStockReminderMedNames: string | null,
-	t: (key: string, options?: Record<string, unknown>) => string,
+	t: TranslationFunction,
 	locale: string
 ): {
 	status: { text: string; className: string };

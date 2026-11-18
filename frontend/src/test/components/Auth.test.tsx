@@ -781,7 +781,10 @@ describe("UserProfile", () => {
 		[null, "https://images.example.test/provider.png", "https://images.example.test/provider.png"],
 	])("uses local avatars before provider pictures (%#)", async (avatarUrl, oidcPictureUrl, expected) => {
 		mockProfileRequests([{ ...mockUser, avatarUrl, oidcPictureUrl }]);
-		renderUserProfile();
+		// Flush the avatar's initial src effect before dispatching its error event.
+		await act(async () => {
+			renderUserProfile();
+		});
 		const image = await screen.findByRole("img", { name: "testuser" });
 		expect(image).toHaveAttribute("src", expected);
 		expect(image).toHaveAttribute("referrerpolicy", "no-referrer");

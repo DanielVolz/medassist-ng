@@ -254,7 +254,7 @@ export async function skipDosesForUser(input: { userId: number; doseIds: string[
 	let switchedFromTakenCount = 0;
 
 	for (const doseId of input.doseIds) {
-		let existing = await findDoseTrackingRow(input.userId, doseId);
+		let existing = await findDoseTrackingRow(db, input.userId, doseId);
 
 		if (!existing) {
 			try {
@@ -271,7 +271,7 @@ export async function skipDosesForUser(input: { userId: number; doseIds: string[
 				if (!isDoseTrackingUniqueConflict(error)) {
 					throw error;
 				}
-				existing = await findDoseTrackingRow(input.userId, doseId);
+				existing = await findDoseTrackingRow(db, input.userId, doseId);
 				if (!existing) {
 					throw error;
 				}
@@ -315,7 +315,7 @@ export async function dismissDosesForUser(input: { userId: number; doseIds: stri
 	let alreadyTakenCount = 0;
 
 	for (const doseId of input.doseIds) {
-		let existing = await findDoseTrackingRow(input.userId, doseId);
+		let existing = await findDoseTrackingRow(db, input.userId, doseId);
 
 		if (!existing) {
 			try {
@@ -332,7 +332,7 @@ export async function dismissDosesForUser(input: { userId: number; doseIds: stri
 				if (!isDoseTrackingUniqueConflict(error)) {
 					throw error;
 				}
-				existing = await findDoseTrackingRow(input.userId, doseId);
+				existing = await findDoseTrackingRow(db, input.userId, doseId);
 				if (!existing) {
 					throw error;
 				}

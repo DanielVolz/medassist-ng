@@ -35,8 +35,6 @@ vi.mock("../db/client.js", () => ({
 	migrationsReady: Promise.resolve(),
 	withImmediateWriteTransaction: async <T>(operation: (transactionDb: typeof testDb) => Promise<T>): Promise<T> =>
 		operation(testDb),
-	withImmediateWriteTransaction: async <T>(operation: (transactionDb: typeof testDb) => Promise<T>): Promise<T> =>
-		operation(testDb),
 }));
 
 vi.mock("../plugins/env.js", () => ({ env: mockedEnv }));

@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../db/client.js";
+import { db, withImmediateWriteTransaction } from "../db/client.js";
 import { doseTracking, medications, userSettings } from "../db/schema.js";
 import { parseDoseId } from "../utils/dose-id.js";
 import { normalizeMedicationIntakes, parseLocalDateTime } from "../utils/scheduler-utils.js";
@@ -58,23 +58,27 @@ function isDoseTrackingUniqueConflict(error: unknown): boolean {
 }
 
 async function findDoseTrackingRow(
+	database: typeof db,
 	userId: number,
 	doseId: string
 ): Promise<typeof doseTracking.$inferSelect | undefined> {
-	const [existing] = await db
+	const [existing] = await database
 		.select()
 		.from(doseTracking)
 		.where(and(eq(doseTracking.userId, userId), eq(doseTracking.doseId, doseId)));
 	return existing;
 }
 
-async function isDoseOutOfStock(options: { userId: number; doseId: string }): Promise<boolean> {
+async function isDoseOutOfStock(
+	database: typeof db,
+	options: { userId: number; doseId: string }
+): Promise<boolean> {
 	const parsedDose = parseDoseId(options.doseId);
 	if (!parsedDose) {
 		return false;
 	}
 
-	const [medication] = await db
+	const [medication] = await database
 		.select()
 		.from(medications)
 		.where(and(eq(medications.id, parsedDose.medicationId), eq(medications.userId, options.userId)));
@@ -83,7 +87,7 @@ async function isDoseOutOfStock(options: { userId: number; doseId: string }): Pr
 		return false;
 	}
 
-	const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, options.userId));
+	const [settings] = await database.select().from(userSettings).where(eq(userSettings.userId, options.userId));
 	const stockCalculationMode = (settings?.stockCalculationMode as "automatic" | "manual") ?? "automatic";
 
 	const intakes = normalizeMedicationIntakes(medication);
@@ -105,9 +109,13 @@ async function isDoseOutOfStock(options: { userId: number; doseId: string }): Pr
 			})()
 		: parsedDose.timestampMs;
 
-	const allDoses = await db.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
-	const doses = await filterScheduledDoseRows(db, options.userId, allDoses);
-	const asNeededStockEffectMilli = await getActiveAsNeededStockEffectMilli(db, options.userId, medication.id);
+	const allDoses = await database.select().from(doseTracking).where(eq(doseTracking.userId, options.userId));
+	const doses = await filterScheduledDoseRows(database, options.userId, allDoses);
+	const asNeededStockEffectMilli = await getActiveAsNeededStockEffectMilli(
+		database,
+		options.userId,
+		medication.id
+	);
 	const stockBeforeDoseMs = Math.max(0, scheduledOccurrenceMs - 1);
 
 	return (
@@ -127,9 +135,6 @@ export async function markDoseTakenForUser(input: {
 	source: DoseTrackingSource;
 	markedBy?: string | null;
 }): Promise<MarkDoseTakenResult> {
-	if (await isAsNeededAnchorDoseId(db, input.userId, input.doseId)) {
-		return { success: false, code: "INVALID_DOSE", message: "Invalid dose ID" };
-	}
 	const parsedDose = parseDoseId(input.doseId);
 	if (!parsedDose) {
 		return {
@@ -147,62 +152,71 @@ export async function markDoseTakenForUser(input: {
 		};
 	}
 
-	const existing = await findDoseTrackingRow(input.userId, input.doseId);
-
-	if (existing && !existing.dismissed) {
-		return { success: true, status: "already_taken" };
-	}
-
-	if (existing?.dismissed && hasRealTakenTimestamp(existing.takenAt)) {
-		return { success: true, status: "already_taken" };
-	}
-
-	if (existing?.dismissed) {
-		return {
-			success: false,
-			code: "ALREADY_SKIPPED",
-			message: "Dose is already skipped",
-		};
-	}
-
-	const outOfStock = await isDoseOutOfStock({ userId: input.userId, doseId: input.doseId });
-	if (outOfStock) {
-		return {
-			success: false,
-			code: "OUT_OF_STOCK",
-			message: "Medication is out of stock",
-		};
-	}
-
-	try {
-		await db.insert(doseTracking).values({
-			userId: input.userId,
-			doseId: input.doseId,
-			takenAt: new Date(),
-			markedBy: input.markedBy ?? null,
-			takenSource: input.source,
-			dismissed: false,
-		});
-	} catch (error) {
-		if (!isDoseTrackingUniqueConflict(error)) {
-			throw error;
+	return withImmediateWriteTransaction(async (transactionDb) => {
+		if (await isAsNeededAnchorDoseId(transactionDb, input.userId, input.doseId)) {
+			return { success: false, code: "INVALID_DOSE", message: "Invalid dose ID" };
 		}
 
-		const concurrentRow = await findDoseTrackingRow(input.userId, input.doseId);
-		if (!concurrentRow) {
-			throw error;
-		}
-		if (!concurrentRow.dismissed || (concurrentRow.dismissed && hasRealTakenTimestamp(concurrentRow.takenAt))) {
+		const existing = await findDoseTrackingRow(transactionDb, input.userId, input.doseId);
+
+		if (existing && !existing.dismissed) {
 			return { success: true, status: "already_taken" };
 		}
-		return {
-			success: false,
-			code: "ALREADY_SKIPPED",
-			message: "Dose is already skipped",
-		};
-	}
 
-	return { success: true, status: "marked" };
+		if (existing?.dismissed && hasRealTakenTimestamp(existing.takenAt)) {
+			return { success: true, status: "already_taken" };
+		}
+
+		if (existing?.dismissed) {
+			return {
+				success: false,
+				code: "ALREADY_SKIPPED",
+				message: "Dose is already skipped",
+			};
+		}
+
+		const outOfStock = await isDoseOutOfStock(transactionDb, {
+			userId: input.userId,
+			doseId: input.doseId,
+		});
+		if (outOfStock) {
+			return {
+				success: false,
+				code: "OUT_OF_STOCK",
+				message: "Medication is out of stock",
+			};
+		}
+
+		try {
+			await transactionDb.insert(doseTracking).values({
+				userId: input.userId,
+				doseId: input.doseId,
+				takenAt: new Date(),
+				markedBy: input.markedBy ?? null,
+				takenSource: input.source,
+				dismissed: false,
+			});
+		} catch (error) {
+			if (!isDoseTrackingUniqueConflict(error)) {
+				throw error;
+			}
+
+			const concurrentRow = await findDoseTrackingRow(transactionDb, input.userId, input.doseId);
+			if (!concurrentRow) {
+				throw error;
+			}
+			if (!concurrentRow.dismissed || (concurrentRow.dismissed && hasRealTakenTimestamp(concurrentRow.takenAt))) {
+				return { success: true, status: "already_taken" };
+			}
+			return {
+				success: false,
+				code: "ALREADY_SKIPPED",
+				message: "Dose is already skipped",
+			};
+		}
+
+		return { success: true, status: "marked" };
+	});
 }
 
 // Route skips preserve taken metadata; bulk service skips intentionally clear it.

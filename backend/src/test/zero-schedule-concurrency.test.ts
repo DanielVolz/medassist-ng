@@ -28,6 +28,7 @@ const [
 	refillRoutesModule,
 	stock,
 	asNeededService,
+	doseTrackingService,
 ] = await Promise.all([
 	import("fastify"),
 	import("@fastify/sensible"),
@@ -40,6 +41,7 @@ const [
 	import("../routes/refills.js"),
 	import("../services/current-stock.js"),
 	import("../services/as-needed-intakes-service.js"),
+	import("../services/dose-tracking-service.js"),
 ]);
 
 const { db, migrationsReady, withImmediateWriteTransaction } = dbClient;
@@ -49,6 +51,7 @@ const { medicationRoutes } = medicationRoutesModule;
 const { refillRoutes } = refillRoutesModule;
 const { computeMedicationCurrentStockRaw } = stock;
 const { createAsNeededIntake } = asNeededService;
+const { markDoseTakenForUser } = doseTrackingService;
 
 type StockMode = "automatic" | "manual";
 
@@ -192,6 +195,43 @@ describe("zero-schedule production write serialization", () => {
 		).toBe(expectedRawStock);
 		expect(Number.isInteger(persisted.scheduleStockRebaseMilli)).toBe(true);
 		expect(persisted.scheduleStockRebaseMilli).not.toBe(0);
+	});
+
+	it("serializes concurrent different-dose intake checks against the last unit", async () => {
+		await db.delete(doseTracking);
+		await db.delete(medications);
+		await db.delete(userSettings);
+		await db.insert(userSettings).values({ userId, stockCalculationMode: "manual" });
+
+		const created = await app.inject({
+			method: "POST",
+			url: "/medications",
+			payload: medicationPayload([{ usage: 1, every: 1, start: "2024-01-01T08:00:00" }]),
+		});
+		expect(created.statusCode).toBe(200);
+		const medicationId = created.json().id as number;
+		await db
+			.update(medications)
+			.set({ packCount: 0, looseTablets: 1 })
+			.where(sql`${medications.id} = ${medicationId}`);
+
+		const results = await Promise.all([
+			markDoseTakenForUser({
+				userId,
+				doseId: `${medicationId}-0-${new Date(2025, 0, 1, 8).getTime()}`,
+				source: "manual",
+			}),
+			markDoseTakenForUser({
+				userId,
+				doseId: `${medicationId}-0-${new Date(2025, 0, 2, 8).getTime()}`,
+				source: "manual",
+			}),
+		]);
+
+		expect(results.filter((result) => result.success && result.status === "marked")).toHaveLength(1);
+		expect(results.filter((result) => !result.success && result.code === "OUT_OF_STOCK")).toHaveLength(1);
+		const recorded = await db.select().from(doseTracking);
+		expect(recorded.filter((dose) => !dose.dismissed)).toHaveLength(1);
 	});
 
 	it("returns the original bounded SQLITE_BUSY from an independent writer and releases the FIFO queue", async () => {

@@ -4,13 +4,32 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const image = "mcr.microsoft.com/playwright:v1.65.0-noble";
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(scriptDirectory, "../..");
+const dockerfile = path.join(scriptDirectory, "playwright-ui.Dockerfile");
+const image = "medassist-ui-playwright:v1.65.1-node22.23.5-npm10.9.9";
 const usage =
 	"Usage: npm run test:e2e:ui:docker -- [--shards=N] [--repeat-each=N] [--no-cache]";
 
+export function createRunnerImagePlan() {
+	return {
+		image,
+		dockerfile,
+		args: [
+			"build",
+			"--platform=linux/amd64",
+			"--file",
+			dockerfile,
+			"--tag",
+			image,
+			scriptDirectory,
+		],
+	};
+}
+
 export function dependencyCacheKey() {
 	const hash = createHash("sha256").update(`${image}:linux/amd64`);
+	hash.update(readFileSync(dockerfile));
 	for (const project of ["shared", "backend", "frontend"]) {
 		for (const file of ["package.json", "package-lock.json"]) {
 			hash.update(readFileSync(path.join(root, project, file)));
@@ -71,6 +90,10 @@ export function createShardPlan(shardIndex, shardCount, runId, options) {
 		? install
 		: `flock /dependency-cache/install.lock bash -lc 'if [ ! -f /dependency-cache/ready ]; then ${install} && touch /dependency-cache/ready; else echo "Reusing locked UI test dependencies"; fi'`;
 	const containerCommand = [
+		"node --version",
+		"npm --version",
+		'test "$(node --version)" = "v22.23.5"',
+		'test "$(npm --version)" = "10.9.9"',
 		installation,
 		"npm run build --prefix shared",
 		`npm run test:e2e:ci:ui --prefix frontend -- ${testArgs.join(" ")}`,
@@ -121,6 +144,23 @@ export function createShardPlan(shardIndex, shardCount, runId, options) {
 	return { name, args, outputDir, reportDir, testArgs };
 }
 
+function buildRunnerImage() {
+	const plan = createRunnerImagePlan();
+	console.log(`Building isolated UI E2E image ${plan.image}`);
+	const result = spawnSync("docker", plan.args, { cwd: root, stdio: "inherit" });
+	if (result.error) {
+		console.error(`Unable to build UI E2E image: ${result.error.message}`);
+		process.exitCode = 1;
+		return false;
+	}
+	if (result.status !== 0) {
+		console.error(`Unable to build UI E2E image (exit ${result.status ?? 1}).`);
+		process.exitCode = result.status || 1;
+		return false;
+	}
+	return true;
+}
+
 function removeOwnedContainers(names) {
 	for (const name of names) {
 		spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
@@ -128,6 +168,8 @@ function removeOwnedContainers(names) {
 }
 
 async function runShards(options) {
+	if (!buildRunnerImage()) return;
+
 	const runId = `${process.pid}-${randomUUID().slice(0, 8)}`;
 	const plans = Array.from({ length: options.shards }, (_, index) =>
 		createShardPlan(index + 1, options.shards, runId, options)

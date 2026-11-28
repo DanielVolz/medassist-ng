@@ -1,6 +1,26 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { createShardPlan, parseOptions } from "./run-ui-e2e-docker.mjs";
+import {
+	createRunnerImagePlan,
+	createShardPlan,
+	parseOptions,
+} from "./run-ui-e2e-docker.mjs";
+
+test("builds a pinned Node 22/npm 10 runtime over the matching Playwright browser image", () => {
+	const plan = createRunnerImagePlan();
+	const dockerfile = readFileSync(plan.dockerfile, "utf8");
+
+	assert.equal(plan.image, "medassist-ui-playwright:v1.65.1-node22.23.5-npm10.9.9");
+	assert.deepEqual(plan.args.slice(0, 3), [
+		"build",
+		"--platform=linux/amd64",
+		"--file",
+	]);
+	assert.match(dockerfile, /FROM node:22\.23\.5-bookworm AS node-runtime/);
+	assert.match(dockerfile, /FROM mcr\.microsoft\.com\/playwright:v1\.65\.1-noble/);
+	assert.match(dockerfile, /test .*10\.9\.9/);
+});
 
 test("defaults local UI Docker runs to one shard and supports explicit two-shard runs", () => {
 	assert.equal(parseOptions([]).shards, 1);
@@ -60,5 +80,7 @@ test("builds shard-specific Docker resources, Playwright selection, and report p
 	assert.ok(first.args.includes("/work/shared/dist:rw,exec"));
 	assert.ok(first.args.includes(`PLAYWRIGHT_OUTPUT_DIR=${first.outputDir}`));
 	assert.ok(first.args.includes(`PLAYWRIGHT_HTML_OUTPUT_DIR=${first.reportDir}`));
+	assert.ok(first.args.includes("medassist-ui-playwright:v1.65.1-node22.23.5-npm10.9.9"));
+	assert.ok(first.args.at(-1).includes('test "$(npm --version)" = "10.9.9"'));
 	assert.ok(first.args.at(-1).includes("--shard=1/2 --repeat-each=2"));
 });

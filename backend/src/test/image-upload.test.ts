@@ -10,7 +10,7 @@ import {
 	removeImageFiles,
 	streamToBuffer,
 	writeOptimizedImageSet,
-} from "../utils/image-upload";
+} from "../utils/image-upload.js";
 
 describe("image-upload utils", () => {
 	const MOCK_TIMESTAMP_MS = 1_700_000_000_000;

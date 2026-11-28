@@ -55,7 +55,7 @@
     "drizzle-kit": "^0.31.11",
     "pino-pretty": "^13.2.0",
     "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },
   "overrides": {
